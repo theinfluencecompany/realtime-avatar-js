@@ -23,6 +23,7 @@ sibling. One can be copied out of this repo and still work.
 | --- | --- | --- |
 | [`coding-companion`](./demo/coding-companion) | Node + browser | Two models in one call: she decides to build via a client tool, a cheaper model writes the code — the build outlives the 2.5s tool deadline, so `write_program` returns a receipt and she polls with `check_program` |
 | [`livestream`](./demo/livestream) | Node + browser | An audience is not a new primitive: a TikTok-Live room of comments, gifts and hearts all ride the one `lk.chat` topic, and she performs to a crowd she can't see |
+| [`math-studio`](./demo/math-studio) | Node + browser | Keeping the tool plane a fixed size as the app grows: a tool per thing on screen fails to register at the eleventh, so six generic verbs act on a curriculum registered in the page, and adding a manipulative costs no tool and no brief |
 
 > This repository is **private**. A link to an example only opens for someone who already has
 > repo access — so anywhere one of these is offered as "clone the code", say so. The packages
@@ -63,6 +64,6 @@ example gallery is configured outside this repository and is not covered by that
 5. **A stated cost** if it starts a call — minutes are billed, and someone running an example
    should know that before they run it.
 6. **Its own default port**, so two examples can run side by side. Taken today: 4192
-   coding-companion, 4193 canvas-tools, 4198 livestream.
+   coding-companion, 4193 canvas-tools, 4198 livestream, 4199 math-studio.
 
 Keep them small. An example is read far more often than it is run.

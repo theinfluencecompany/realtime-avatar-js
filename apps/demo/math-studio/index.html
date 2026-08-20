@@ -1,0 +1,2175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Math Studio</title>
+    <style>
+      :root {
+        --ink:#20222a; --dim:#7f869a; --line:#e8eaf0; --red:#ef5b3f; --blue:#3b7ce0;
+        --gold:#ffb224; --grass:#28a86b; --plum:#a469d6; --card:#fff;
+        --pop:cubic-bezier(.34,1.56,.64,1); --settle:cubic-bezier(.22,.61,.36,1);
+        --rail:420px;
+
+        /* ── the room ────────────────────────────────────────────────────────────
+           The only tokens the theme switches. The board stays white in both, because a
+           manipulative is ink on paper and always will be — what changes is the light in
+           the room around it. That is also where the hierarchy now comes from: three white
+           cards on cream had nothing to be the subject of. */
+        --room:#14161c; --room-2:#1c1f27; --room-ink:#eef1f7; --room-dim:#8f98ab;
+        --room-line:#2b2f3a; --room-chip:#242835; --room-chip-ink:#c9cedb;
+        --deep:#08090c;
+        --shell-shadow:0 34px 80px -26px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,.05);
+        --board-shadow:0 22px 50px -20px rgba(0,0,0,.66);
+        --scrim:linear-gradient(180deg, rgba(16,18,24,.8) 0 14%, rgba(16,18,24,0) 34%,
+                                        rgba(16,18,24,.14) 50%, rgba(16,18,24,.95) 100%);
+      }
+      body.lite {
+        --room:#e3ded1; --room-2:#f4f1e9; --room-ink:#20222a; --room-dim:#6f7686;
+        --room-line:#d2ccbc; --room-chip:#fff; --room-chip-ink:#4a5160;
+        --deep:#cdc6b4;
+        --shell-shadow:0 30px 64px -26px rgba(66,54,34,.55), 0 0 0 1px rgba(66,54,34,.1);
+        --board-shadow:0 18px 40px -20px rgba(66,54,34,.45), 0 2px 6px rgba(66,54,34,.1),
+                       0 0 0 1px rgba(66,54,34,.07);
+        /* Still a dark scrim in the light theme: her caption sits on a photograph either way,
+           and white on a darkened photograph is the only thing that stays legible when the
+           photograph itself changes from a teacher to a monkey king. */
+        --scrim:linear-gradient(180deg, rgba(24,20,14,.6) 0 14%, rgba(24,20,14,0) 32%,
+                                        rgba(24,20,14,.1) 48%, rgba(24,20,14,.86) 100%);
+      }
+      /* The room's chip surface is white in the light theme, so "selected" cannot also be white. */
+      body.lite .lvbtn { background:var(--ink); color:#fff; }
+      body.lite .lvbtn.open { background:var(--gold); color:#4a3000; }
+      body.lite .chip { box-shadow:0 0 0 1px rgba(66,54,34,.09); }
+      * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+      html,body { margin:0; height:100%; overflow:hidden; background:var(--deep);
+        color:var(--room-ink); transition:background .25s;
+        font:16px/1.5 ui-rounded,system-ui,-apple-system,"Segoe UI",sans-serif; }
+      /* The page is an app shell, not a document — and one object, not three. The two halves live
+         inside a single rounded container with the room showing around it: she was flush to the
+         window on the left, the board was a separate sheet on the right, and the two read as
+         unrelated panels that happened to be adjacent. */
+      body { display:flex; }
+      #main { flex:1 1 auto; min-width:0; height:100vh; overflow:hidden; display:flex; }
+      #cam { will-change:transform; flex:1 1 auto; min-width:0; display:flex;
+             padding:clamp(8px, 1.4vmin, 18px); }
+      .wrap { flex:1 1 auto; min-width:0; min-height:0; display:grid;
+              grid-template-columns:clamp(250px,28vw,440px) minmax(0,1fr);
+              /* An explicit row, because an auto one is sized by its tallest content: her panel
+                 asks for portrait plus controls, gets it, and overflows the window instead of the
+                 portrait giving up the height it was always meant to give up. */
+              grid-template-rows:minmax(0, 1fr);
+              /* A ceiling on the whole composition, centred in the room. Without it a tall window
+                 stretched her panel to two thousand pixels and the sheet floated in the middle of
+                 an ocean. Below this height nothing letterboxes and nothing changes. */
+              max-height:min(100%, 1000px); margin:auto 0;
+              background:var(--room); border-radius:22px; overflow:hidden;
+              box-shadow:var(--shell-shadow); }
+      #resizer { flex:0 0 6px; cursor:col-resize; background:var(--room-line); position:relative; z-index:21; }
+      #resizer:hover, #resizer.drag { background:var(--gold); }
+
+      button { font:inherit; border-radius:12px; cursor:pointer; border:0; background:var(--ink);
+               color:#fff; padding:9px 16px; font-weight:650;
+               box-shadow:0 3px 0 rgba(0,0,0,.18); transition:transform .09s var(--settle), box-shadow .09s; }
+      button:active:not(:disabled) { transform:translateY(3px); box-shadow:0 0 0 rgba(0,0,0,.18); }
+      button:disabled { opacity:.38; cursor:default; box-shadow:none; }
+
+      /* ══ HER HALF ═════════════════════════════════════════════════════════════
+         Floor to ceiling, flush to the window edge, no card and no padding around it. She is
+         not an element on the page, she is one of its two halves. The version where she sat in
+         a 300px card above a microphone picker read as a placeholder — and for the whole time
+         no call was running, that is exactly what it was: an empty grey rectangle. */
+      .person { position:relative; display:flex; flex-direction:column; min-width:0;
+                background:var(--room-2); overflow:hidden; }
+      /* Her portrait is bound to a ratio, not to a fraction of the viewport. The track is 1:1 and
+         `cover` crops the sides, so the taller the slot the more it crops — at 1:2 you are looking
+         at a nose. Tying the height to the column's own width caps the crop at 1:1.45 whatever
+         the window does; the max-height is the second belt, for very wide columns. Any slack goes
+         to the panel below, which is the same colour and so does not read as a hole. */
+      .face { position:relative; flex:0 1 auto; aspect-ratio:1 / 1.45;
+              max-height:min(62vh, 560px); min-height:190px; background:#0d0f14; }
+      video,.still { position:absolute; inset:0; width:100%; height:100%; display:block;
+                     object-fit:cover; object-position:center 24%; background:#0d0f14; }
+      .scrim { position:absolute; inset:0; background:var(--scrim); pointer-events:none; }
+      .ring { position:absolute; inset:0; border:0 solid var(--gold); pointer-events:none;
+              transition:border-width .12s; }
+      .ring.on { border-width:5px; }
+      .brand { position:absolute; top:0; left:0; right:78px; padding:14px 17px; color:#fff; }
+      .brand b { display:block; font-size:15.5px; letter-spacing:-.01em; }
+      .brand s { text-decoration:none; font-size:11.5px; color:rgba(255,255,255,.62); }
+      /* Choosing a teacher happens on the teacher, not in a settings panel underneath one. A
+         column down the right of the portrait, out of the caption's way and out of the brand's. */
+      .whorow { position:absolute; top:13px; right:13px; z-index:3;
+                display:flex; flex-direction:column; gap:9px; }
+      .who { background:transparent; border:0; border-radius:50%; padding:0; cursor:pointer;
+             box-shadow:none; line-height:0; }
+      .who img { width:46px; height:46px; border-radius:50%; display:block; object-fit:cover;
+                 opacity:.6; border:2px solid rgba(255,255,255,.45);
+                 box-shadow:0 3px 12px rgba(0,0,0,.45);
+                 transition:opacity .16s, border-color .16s, transform .16s var(--pop); }
+      .who:hover img { opacity:.92; transform:scale(1.06); }
+      .who.on img { opacity:1; border-color:var(--gold); border-width:3px; }
+      .talk { position:absolute; bottom:0; left:0; right:0; padding:16px 17px 18px; color:#fff; }
+      .talk .name { font-size:11.5px; font-weight:750; letter-spacing:.07em; text-transform:uppercase;
+                    color:var(--gold); }
+      .says { margin-top:6px; font-size:14.5px; line-height:1.45; color:#f2f4f9; min-height:44px; }
+
+      /* Everything about *her* is under her: who is teaching, which voice, which microphone,
+         and the button that calls her. Nothing about the maths is in here. */
+      /* Under her: the button that calls her, and everything else folded away. Expanded, this
+         panel was taller than the portrait above it — a column of configuration with a face on
+         top. Collapsed it is one button and one line.
+
+         It never shrinks: the face gives up its height first, because a squashed set of controls
+         is unusable and a shorter portrait is only a shorter portrait. Any slack left under it
+         shows `.person`, which is the same colour, so it reads as one panel and not as a hole. */
+      .foot { flex:0 0 auto; padding:11px 13px 12px; background:var(--room-2);
+              border-top:1px solid var(--room-line); display:flex; flex-direction:column; gap:9px; }
+      .frow { display:flex; align-items:center; gap:7px; }
+
+      /* One disclosure for the voice and the microphone. `<details>` rather than a
+         hand-rolled toggle: it is keyboard-operable and it holds no state of its own. */
+      .setup { border-radius:11px; background:var(--room-chip); }
+      .setup > summary { list-style:none; cursor:pointer; padding:8px 11px; font-size:11.5px;
+                         font-weight:650; color:var(--room-chip-ink); display:flex;
+                         align-items:center; gap:6px; border-radius:11px; }
+      .setup > summary::-webkit-details-marker { display:none; }
+      .setup > summary b { font-weight:650; overflow:hidden; text-overflow:ellipsis;
+                           white-space:nowrap; }
+      .setup > summary i { font-style:normal; margin-left:auto; opacity:.55; font-size:9px;
+                           transition:transform .2s; }
+      .setup[open] > summary i { transform:rotate(180deg); }
+      .setup .body { display:flex; flex-direction:column; gap:7px; padding:1px 9px 9px; }
+      .setup.warn > summary { color:#e8503a; }
+
+      #voicesel { font:inherit; font-size:11.5px; font-weight:650; border-radius:11px; padding:7px 8px;
+                  border:0; background:var(--room-2); color:var(--room-chip-ink); width:100%; }
+      #voicesel.ph { color:#e8503a; }
+      #call { flex:1 1 auto; background:var(--grass); box-shadow:0 4px 0 #177049; border-radius:999px;
+              padding:11px 18px; font-size:14.5px; }
+      #call:active:not(:disabled) { box-shadow:0 0 0 #177049; }
+      #leave { background:transparent; color:#e8503a; border:2px solid #e8503a; border-radius:999px;
+               box-shadow:none; padding:9px 15px; font-size:13px; }
+      #leave:disabled { border-color:var(--room-line); color:var(--room-dim); }
+
+      /* ══ THE BOARD ════════════════════════════════════════════════════════════
+         A lit white panel in a room. Nothing about the teacher is in here, and nothing about
+         the maths is over there. */
+      .stage { position:relative; display:flex; flex-direction:column; min-width:0; min-height:0;
+               padding:12px 14px 14px 12px; }
+      .chrome { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:0 3px 11px;
+                flex-wrap:wrap; row-gap:7px; }
+      /* Two-state controls are buttons showing the current state, not segmented pairs. Two pairs
+         plus a level name as long as "Geometry · Bézier · de Casteljau" overran the row and the
+         last control was clipped behind the rail. */
+      .tgl { background:var(--room-chip); color:var(--room-chip-ink); border-radius:999px;
+             padding:7px 12px; font-size:11.5px; font-weight:650; box-shadow:none;
+             white-space:nowrap; flex:0 0 auto; }
+      .tgl:hover { color:var(--room-ink); }
+      /* The board is a sheet of paper on a lit desk, sized to what is written on it and centred in
+         the room. Stretching it to the full height instead gave a tall white field with the lesson
+         floating in the middle of it, which is the same emptiness the old layout had — just white
+         instead of grey. */
+      .desk { flex:1 1 auto; min-height:0; display:flex; align-items:center; }
+      .chip { background:var(--room-chip); color:var(--room-chip-ink); border-radius:999px;
+              padding:6px 12px; font-size:12.5px; font-weight:650; white-space:nowrap; }
+      .chip.hot { background:var(--gold); color:#4a3000; }
+      .bar { height:10px; background:var(--room-line); border-radius:999px; overflow:hidden;
+             flex:1 1 auto; min-width:50px; }
+      .bar i { display:block; height:100%; width:0; border-radius:999px;
+               background:linear-gradient(90deg,var(--gold),#ffd36b); transition:width .5s var(--pop); }
+      /* The level button is the course picker: a chip that says where you are, and opens the whole
+         curriculum over the board rather than above it. */
+      .lvbtn { display:inline-flex; align-items:center; gap:7px; border-radius:999px; padding:7px 14px;
+               font-size:12.5px; font-weight:700; background:#fff; color:var(--ink); box-shadow:none;
+               flex:0 0 auto; white-space:nowrap; }
+      .lvbtn i { font-style:normal; opacity:.5; font-size:9px; }
+      .lvbtn.open { background:var(--gold); color:#4a3000; }
+      .pop { position:absolute; z-index:8; top:44px; left:14px; right:14px; background:#fff;
+             color:var(--ink); border-radius:16px; padding:12px 13px 4px; display:none;
+             overflow:auto; max-height:min(64vh,430px); box-shadow:0 24px 60px -14px rgba(0,0,0,.6); }
+      .pop.on { display:block; }
+
+      .whiteboard { width:100%; max-height:100%; background:var(--card); color:var(--ink);
+                    border-radius:20px; padding:18px 22px 20px; display:flex; flex-direction:column;
+                    box-shadow:var(--board-shadow); }
+      .q { font-size:clamp(26px,3.2vw,44px); font-weight:800; text-align:center; flex:0 0 auto;
+           font-variant-numeric:tabular-nums; margin:0 0 6px; line-height:1.2; }
+      /* "3 ＋ 4 ＝ ▁" and "Match the grey wave — 88% or better" do not want the same type size.
+         Set from the rendered length, because only the level knows how long its prompt is. */
+      .q.long  { font-size:clamp(20px,2.2vw,30px); }
+      .q.xlong { font-size:clamp(17px,1.7vw,23px); }
+      .q .blank { display:inline-block; min-width:56px; border-bottom:6px solid var(--gold); border-radius:3px; }
+
+      /* ══ THE WORKSPACE ═══════════════════════════════════════════════════════
+         One host element, and it is now the biggest thing on the page. Every manipulative builds
+         its own SVG inside it and tears it down again — nothing here knows what a Pythagoras
+         square or a Bézier curve is, which is the entire point of the registry.
+
+         Every manipulative draws into a viewBox and the plot is stretched to the host, so the
+         picture grows with the window instead of sitting at 484 pixels in the middle of it. That
+         is also why the pointer helpers below go through getScreenCTM: the plot letterboxes, and
+         a ratio of widths is wrong the moment it does. */
+      /* `#work` takes the plugin's viewBox as an aspect-ratio, and the question, the picture, the
+         keypad and the hint are centred in the card as one group. Stretching the picture box to
+         the full height instead just letterboxed a wide manipulative inside a tall box and left
+         a hundred and seventy pixels of nothing above and below it. `flex:0 1 auto` — no grow,
+         but it may shrink — is what lets a near-square manipulative still fit. */
+      .play { flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+              justify-content:center; gap:8px; }
+      /* A maximum as well as a minimum. Handing a manipulative the whole canvas made its parts
+         comically large — a manipulative has a size it is legible at, and past about half again
+         its own viewBox it stops reading as a diagram and starts reading as decoration.
+         `mountFor` sets the ceiling from the plugin's own declared width. */
+      #work { flex:0 1 auto; width:100%; min-height:120px; margin:0 auto; position:relative; }
+      svg.plot { position:absolute; inset:0; width:100%; height:100%; overflow:visible;
+                 touch-action:none; }
+      svg.plot text { font:800 14px ui-rounded,system-ui,sans-serif; user-select:none; }
+      svg.plot .hit { cursor:pointer; }
+
+      /* Anything the learner can take hold of. `held` is set for the duration of a drag, so a
+         manipulative never has to think about the cursor. */
+      svg.plot .grab { cursor:grab; }
+      svg.plot .grab.held { cursor:grabbing; }
+      svg.plot .knob { transition:transform .3s var(--pop); }
+      svg.plot .knob.held { transition:none; }
+      svg.plot .tri { transition:transform .8s var(--settle); }
+      svg.plot .tri.held { transition:none; }
+      body.calm svg.plot .knob, body.calm svg.plot .tri { transition:none; }
+
+      /* Eleven across when there is room for eleven, fewer when there is not. A fixed
+         `repeat(11,1fr)` ran 0-20 straight off the side of the sheet as soon as the board got
+         narrow, and a keypad you cannot reach the 20 on is worse than a keypad in four rows. */
+      .pad { display:grid; grid-template-columns:repeat(auto-fit,minmax(32px,1fr)); gap:5px;
+             flex:0 0 auto; }
+      .pad button { padding:9px 0; font-size:15px; font-weight:800; background:#f3f4f9; color:var(--ink);
+                    box-shadow:0 4px 0 var(--line); border-radius:11px; }
+      .pad button:active { background:var(--gold); box-shadow:0 0 0 var(--line); }
+
+      /* ══ COURSE PICKER ══════════════════════════════════════════════════════ */
+      .strand { margin-bottom:10px; }
+      .strand h4 { margin:0 0 5px; font-size:11.5px; letter-spacing:.09em; text-transform:uppercase;
+                   color:var(--dim); font-weight:700; }
+      .lvls { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:7px; }
+      .lvl { background:#f8f9fc; border-radius:13px; padding:8px 10px; cursor:pointer; text-align:left;
+             box-shadow:0 3px 0 var(--line); transition:transform .15s var(--pop), box-shadow .15s;
+             border:2px solid transparent; }
+      .lvl:hover:not(.soon) { transform:translateY(-2px); box-shadow:0 6px 0 var(--line); }
+      .lvl.on { border-color:var(--gold); box-shadow:0 3px 0 #d68f0d; }
+      .lvl.soon { opacity:.45; cursor:not-allowed; }
+      .lvl .nm { font-weight:750; font-size:13px; }
+      .lvl .mt { color:var(--dim); font-size:10.5px; margin-top:2px; display:flex; gap:6px; flex-wrap:wrap;
+                 align-items:center; }
+      .lvl .d { display:inline-block; width:34px; height:5px; border-radius:99px; background:var(--line);
+                position:relative; overflow:hidden; vertical-align:middle; }
+      .lvl .d i { position:absolute; inset:0 auto 0 0; background:var(--gold); }
+      .lvl .tag { background:var(--grass); color:#fff; border-radius:99px; padding:1px 6px;
+                  font-weight:750; font-size:9.5px; letter-spacing:.04em; }
+
+      .mic { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--room-dim); }
+      /* Out of the drawer and back on the panel. A microphone that enumerates, hands back a live
+         track and then publishes silence is the failure this demo has always been most exposed to
+         — and folding the meter away meant the one instrument that shows it was behind a click. */
+      .micbar { background:var(--room-chip); border-radius:11px; padding:6px 10px 6px 6px; }
+      .micbar #micstate { margin-left:auto; font-weight:650; }
+      .micbar.bad { background:#3a1f1c; }
+      body.lite .micbar.bad { background:#fbe6e2; }
+      .mic .lv { flex:1 1 auto; height:6px; background:var(--room-line); border-radius:999px;
+                 overflow:hidden; min-width:30px; }
+      .mic .lv i { display:block; height:100%; width:0; background:var(--grass); border-radius:999px;
+                   transition:width .06s linear; }
+      .mic.bad { color:#e8503a; font-weight:650; }
+      .mic select { font:inherit; font-size:10.5px; max-width:104px; border-radius:8px; border:0;
+                    padding:4px 5px; background:var(--room-chip); color:var(--room-chip-ink); }
+      .mic button { padding:4px 8px; font-size:10.5px; border-radius:8px; background:var(--room-chip);
+                    color:var(--room-chip-ink); box-shadow:none; font-weight:650; }
+      /* The hint under the board is on paper; everything else that uses .hint is in the room. */
+      .hint { color:var(--dim); font-size:11.5px; line-height:1.5; margin:0; flex:0 0 auto; }
+      .foot .hint { color:var(--room-dim); font-size:10.5px; }
+      .err { color:#ff9d8a; font-size:12.5px; font-weight:650; flex:0 0 auto; padding:0 3px 8px; }
+      body.lite .err { color:#c3341c; }
+      .err:empty { display:none; }
+
+      /* ══ TYPING TO HER ═══════════════════════════════════════════════════════
+         The third way in, under the board rather than on it, because it is not a maths widget —
+         it is the microphone's understudy. Speech recognition is the one thing in this demo still
+         unproven end to end, and three of the four levels hide the keypad, so without this a
+         learner whose microphone is broken has no way to say a number at all. */
+      .tell { flex:0 0 auto; display:flex; gap:7px; align-items:center; padding:12px 3px 0; }
+      .tell input { flex:1 1 auto; min-width:0; font:inherit; font-size:13px; border:0;
+                    border-radius:999px; padding:11px 16px; background:var(--room-chip);
+                    color:var(--room-ink); }
+      .tell input::placeholder { color:var(--room-dim); }
+      .tell input:focus { outline:2px solid var(--gold); outline-offset:1px; }
+      .tell button { background:var(--gold); color:#4a3000; border-radius:999px; padding:11px 18px;
+                     font-size:13px; box-shadow:0 3px 0 #d68f0d; }
+      .tell button:active:not(:disabled) { box-shadow:0 0 0 #d68f0d; }
+      .tellnote { flex:0 0 auto; font-size:10.5px; color:var(--room-dim); padding:6px 17px 0;
+                  min-height:16px; }
+      .tellnote b { color:var(--gold); font-weight:650; }
+
+      /* Below this the two halves stop making sense side by side, so the page becomes a document
+         again: her panel gets a fixed height at the top, the board follows it, and #main scrolls
+         rather than dividing one short viewport between a face and a manipulative and ruining
+         both. */
+      @media (max-width:880px) {
+        #main, #cam { display:block; overflow:auto; }
+        #cam { padding:0; }
+        /* Full bleed rather than a shell: at this width the rounded frame is all margin. */
+        .wrap { display:block; min-height:100vh; border-radius:0; box-shadow:none;
+                max-height:none; margin:0; }
+        .person { height:auto; }
+        .face { aspect-ratio:auto; height:44vh; max-height:none; flex:0 0 auto; }
+        .stage { min-height:74vh; padding:12px 12px 16px; }
+      }
+
+      /* ══ TRACE RAIL ══════════════════════════════════════════════════════════ */
+      /* Capped against the viewport, not just against 70% of it: a rail dragged out to 420px on a
+         big screen and then reopened on a small one left the workspace 350 pixels wide. */
+      #trace { flex:0 0 var(--rail); min-width:250px; max-width:46vw; height:100vh; background:#14161b;
+               color:#c9cedb; display:flex; flex-direction:column; z-index:20;
+               font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+      #trace .top { display:flex; align-items:center; gap:5px; padding:8px 9px;
+                    border-bottom:1px solid #23262f; flex-wrap:wrap; }
+      #trace .top b { color:#eef1f7; font:600 12px/1 ui-sans-serif,system-ui; letter-spacing:.06em; }
+      #trace input { flex:1; min-width:70px; background:#1c1f26; border:1px solid #2b2f3a; color:#dfe4ee;
+                     border-radius:7px; padding:4px 7px; font:inherit; }
+      #trace .tb { background:#1c1f26; border:1px solid #2b2f3a; color:#8f98ab; border-radius:7px;
+                   padding:3px 7px; font:inherit; cursor:pointer; box-shadow:none; font-weight:500; }
+      #trace .tb.on { background:#2f3543; color:#eef1f7; }
+      #trace .tabs { display:flex; gap:4px; padding:0 9px 8px; }
+      #trace .tab { background:#1c1f26; border:1px solid #2b2f3a; color:#8f98ab; border-radius:7px;
+                    padding:4px 11px; font:600 11px/1 ui-sans-serif,system-ui; letter-spacing:.05em;
+                    cursor:pointer; box-shadow:none; }
+      #trace .tab.on { background:#2f3543; color:#eef1f7; }
+      .pane { flex:1; overflow:auto; padding:6px 9px 20px; display:none; }
+      .pane.on { display:block; }
+      #rows { padding:3px 0 20px; }
+      .thead { color:#8f98ab; padding:4px 0 8px; border-bottom:1px solid #23262f; margin-bottom:8px; }
+      .thead b { color:#eef1f7; }
+      .tool { border:1px solid #23262f; border-radius:8px; padding:7px 9px; margin-bottom:7px; background:#181b21; }
+      .tool.hit { border-color:#5c3d16; }
+      .tool .h { display:flex; align-items:baseline; gap:7px; }
+      .tool .n { color:#f0b45c; font-weight:700; }
+      .tool .c { color:#5d6577; margin-left:auto; }
+      .tool .d { color:#8f98ab; margin-top:3px; line-height:1.45; }
+      .tool .p { color:#6d7690; margin-top:3px; }
+      .tool .last { color:#9fd3a8; margin-top:3px; word-break:break-word; }
+      .tool.rej { border-color:#5c1f1f; } .tool.rej .n { color:#ff9d8a; }
+      .reg { border:1px solid #23262f; border-radius:8px; padding:7px 9px; margin-bottom:6px; background:#181b21; }
+      .reg .n { color:#7fd6a8; font-weight:700; }
+      .reg .n.soon { color:#5d6577; }
+      .reg .m { color:#6d7690; margin-top:2px; }
+      .reg .m b { color:#8f98ab; font-weight:400; }
+      .banner { border:1px solid #4a3410; background:#1d1a12; border-radius:8px; padding:8px 10px;
+                margin-bottom:9px; color:#ffd27a; line-height:1.6; }
+      .banner b { color:#fff0c9; }
+      .row { display:grid; grid-template-columns:48px 58px 1fr; gap:6px; padding:3px 9px;
+             border-bottom:1px solid #1c1f26; align-items:baseline; }
+      .row:hover { background:#191c23; }
+      .row .ts { color:#5d6577; text-align:right; }
+      .row .k { font-size:9px; font-weight:700; letter-spacing:.07em; padding:1px 4px; border-radius:4px;
+                text-align:center; align-self:start; margin-top:1px; }
+      .row .body { word-break:break-word; white-space:pre-wrap; }
+      .row .nm { color:#eef1f7; font-weight:600; }
+      .row .arg { color:#7d879b; }
+      .row .arrow { color:#5d6577; }
+      .row .res { color:#9fd3a8; }
+      .row .ms { color:#c98a3a; }
+      .k.HTTP { background:#1e3a5f; color:#7fb4f0; }
+      .k.ROOM { background:#3a2a5c; color:#c1a2f0; }
+      .k.TOOL { background:#5c3d16; color:#f0b45c; }
+      .k.SAY  { background:#1d4433; color:#7fd6a8; }
+      .k.MIC  { background:#2b2f3a; color:#9aa4b8; }
+      .k.WORK { background:#153a44; color:#71cfe0; }
+      .k.FX   { background:#22252d; color:#6d7690; }
+      .k.ERR  { background:#5c1f1f; color:#ff9d8a; }
+      .row.err .body { color:#ff9d8a; }
+
+      #fx { position:fixed; inset:0; pointer-events:none; overflow:hidden; z-index:9; }
+      .conf { position:absolute; width:10px; height:14px; border-radius:3px; opacity:0; }
+      @keyframes fall { 0%{opacity:1;transform:translateY(-40px) rotate(0)}
+                        100%{opacity:0;transform:translateY(106vh) rotate(760deg)} }
+      #sheet { position:fixed; inset:0; background:rgba(24,18,10,.5); display:none;
+               place-items:center; z-index:10; padding:20px; }
+      #sheet.on { display:grid; }
+      .report { background:#fff; border-radius:22px; padding:24px 28px; max-width:460px; width:100%;
+                box-shadow:0 24px 70px rgba(0,0,0,.3); }
+      .report h3 { margin:0 0 2px; font-size:21px; }
+      .report .big { font-size:46px; margin:6px 0; }
+      .report table { width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
+      .report td { padding:6px 0; border-bottom:1px solid var(--line); }
+      .report td:last-child { text-align:right; font-variant-numeric:tabular-nums; font-weight:650; }
+      body.calm .conf { display:none !important; }
+      @media (prefers-reduced-motion:reduce) { .conf { display:none !important; } }
+    </style>
+  </head>
+  <body>
+    <div id="fx"></div>
+    <div id="sheet"><div class="report" id="report"></div></div>
+
+    <div id="main"><div id="cam"><div class="wrap">
+      <section class="person">
+        <div class="face">
+          <video id="her" autoplay playsinline style="display:none"></video>
+          <img class="still" id="still" alt="" />
+          <div class="scrim"></div>
+          <div class="ring" id="ring"></div>
+          <div class="brand">
+            <b>Math Studio</b>
+            <s>ages 11–16 · six tools, however many manipulatives</s>
+          </div>
+          <div class="whorow" id="pick"></div>
+          <div class="talk">
+            <div class="name" id="whoname">—</div>
+            <div class="says" id="says">Pick a level and a teacher, test the mic, then start.</div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="frow">
+            <button id="call">Start the lesson</button>
+            <button id="leave" disabled>End</button>
+          </div>
+          <div class="mic micbar" id="micbar">
+            <button id="mictest">test mic</button>
+            <span class="lv"><i id="miclv"></i></span>
+            <span id="micstate">not tested</span>
+          </div>
+          <details class="setup" id="setup">
+            <summary><b id="setupsum">setup</b><i>▾</i></summary>
+            <div class="body">
+              <select id="voicesel" title="Voice preset — the registry in voices.json"></select>
+              <select id="micdev"></select>
+              <div class="mic" id="micmsg">Microphone</div>
+            </div>
+          </details>
+          <p class="hint" id="spend"></p>
+        </div>
+      </section>
+
+      <section class="stage">
+        <div class="chrome">
+          <button class="lvbtn" id="lvchip">—</button>
+          <div class="bar"><i id="bar"></i></div>
+          <span class="chip" id="cnt">0 / 10</span>
+          <span class="chip" id="stk">streak 0</span>
+          <button class="tgl" id="mo">motion</button>
+          <button class="tgl" id="th">dark room</button>
+        </div>
+        <div class="pop" id="course"></div>
+        <div class="err" id="err"></div>
+        <div class="desk">
+          <div class="whiteboard">
+            <div class="play">
+              <div class="q" id="q">— — —</div>
+              <div id="work"></div>
+              <div class="pad" id="pad"></div>
+              <p class="hint" id="inputhint"></p>
+            </div>
+          </div>
+        </div>
+        <form class="tell" id="tell">
+          <input id="tellin" autocomplete="off" enterkeyhint="send"
+                 placeholder="Type an answer, or say something to her…" />
+          <button type="submit">Send</button>
+        </form>
+        <p class="tellnote" id="tellnote">There is no channel from this page to her, so anything you
+          type rides home on her next tool call.</p>
+      </section>
+    </div></div></div>
+
+    <div id="resizer"></div>
+
+    <aside id="trace">
+      <div class="top">
+        <b>TRACE</b>
+        <input id="tq" placeholder="filter…" />
+        <button class="tb on" data-f="ALL">all</button>
+        <button class="tb" data-f="TOOL">tool</button>
+        <button class="tb" data-f="WORK">work</button>
+        <button class="tb" data-f="SAY">say</button>
+        <button class="tb" data-f="ERR">err</button>
+        <button class="tb" id="tcopy">copy</button>
+        <button class="tb" id="tclear">clear</button>
+      </div>
+      <div class="tabs">
+        <button class="tab on" data-t="rows">TRACE</button>
+        <button class="tab" data-t="tools">TOOLS</button>
+        <button class="tab" data-t="registry">REGISTRY</button>
+      </div>
+      <div id="rows" class="pane on"></div>
+      <div id="tools" class="pane"></div>
+      <div id="registry" class="pane"></div>
+    </aside>
+
+    <script type="module">
+      import { Room, RoomEvent, createLocalAudioTrack, createAudioAnalyser }
+        from "https://esm.sh/livekit-client@2.19.2";
+      import { attachAvatarTools, TOOL_DEADLINE_MS } from "/sdk/tools.js";
+      const $ = (id) => document.getElementById(id);
+
+      /* ══ SPLIT PANE ══════════════════════════════════════════════════════════ */
+      (() => {
+        const saved = Number(localStorage.getItem("ms_rail"));
+        if (saved >= 250) document.documentElement.style.setProperty("--rail", saved + "px");
+        const rz = $("resizer");
+        let dragging = false;
+        const apply = (x) => {
+          const w = Math.max(250, Math.min(window.innerWidth * 0.46, window.innerWidth - x));
+          document.documentElement.style.setProperty("--rail", w + "px");
+          return w;
+        };
+        rz.addEventListener("pointerdown", (e) => { dragging = true; rz.classList.add("drag");
+          rz.setPointerCapture(e.pointerId); document.body.style.userSelect = "none"; });
+        rz.addEventListener("pointermove", (e) => { if (dragging) apply(e.clientX); });
+        const stop = (e) => { if (!dragging) return; dragging = false; rz.classList.remove("drag");
+          document.body.style.userSelect = ""; localStorage.setItem("ms_rail", String(apply(e.clientX))); };
+        rz.addEventListener("pointerup", stop); rz.addEventListener("pointercancel", stop);
+        rz.addEventListener("dblclick", () => {
+          document.documentElement.style.setProperty("--rail", "460px");
+          localStorage.setItem("ms_rail", "460"); });
+      })();
+
+      /* ══ TRACE ═══════════════════════════════════════════════════════════════ */
+      const Trace = (() => {
+        const T0 = performance.now();
+        const all = [];
+        let filter = "ALL", q = "";
+        const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
+        const brief = (v, n = 140) => {
+          if (v === undefined || v === "") return "";
+          let s = typeof v === "string" ? v : JSON.stringify(v);
+          if (s === undefined) s = String(v);
+          return s.length > n ? s.slice(0, n) + "…" : s;
+        };
+        function render() {
+          const box = $("rows");
+          const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+          box.innerHTML = all
+            .filter((r) => filter === "ALL" || r.k === filter)
+            .filter((r) => !q || (r.name + " " + r.arg + " " + r.res).toLowerCase().includes(q))
+            .map((r) => `<div class="row${r.k === "ERR" ? " err" : ""}">
+              <span class="ts">+${r.t}s</span><span class="k ${r.k}">${r.k}</span>
+              <span class="body"><span class="nm">${esc(r.name)}</span>${
+                r.arg ? ` <span class="arg">${esc(r.arg)}</span>` : ""}${
+                r.res ? ` <span class="arrow">→</span> <span class="res">${esc(r.res)}</span>` : ""}${
+                r.ms != null ? ` <span class="ms">${r.ms}ms</span>` : ""}</span></div>`).join("");
+          if (stick) box.scrollTop = box.scrollHeight;
+        }
+        function add(k, name, arg, res, ms) {
+          all.push({ k, name, t: ((performance.now()-T0)/1000).toFixed(2), arg: brief(arg), res: brief(res), ms });
+          if (all.length > 800) all.shift();
+          render();
+        }
+        $("tq").oninput = (e) => { q = e.target.value.toLowerCase(); render(); };
+        document.querySelectorAll("#trace .tb[data-f]").forEach((b) => b.onclick = () => {
+          filter = b.dataset.f;
+          document.querySelectorAll("#trace .tb[data-f]").forEach((x) => x.classList.toggle("on", x === b));
+          render(); });
+        $("tclear").onclick = () => { all.length = 0; render(); };
+        $("tcopy").onclick = async () => {
+          const txt = all.map((r) => `+${r.t}s  ${r.k.padEnd(4)} ${r.name} ${r.arg}` +
+            (r.res ? ` -> ${r.res}` : "") + (r.ms != null ? `  ${r.ms}ms` : "")).join("\n");
+          try { await navigator.clipboard.writeText(txt);
+            $("tcopy").textContent = "copied"; setTimeout(() => ($("tcopy").textContent = "copy"), 1200);
+          } catch { console.log(txt); }
+        };
+        return {
+          http:(n,a,r,ms) => add("HTTP",n,a,r,ms), room:(n,a,r,ms) => add("ROOM",n,a,r,ms),
+          tool:(n,a,r,ms) => add("TOOL",n,a,r,ms), say:(s) => add("SAY","her","",s),
+          work:(n,a,r) => add("WORK",n,a,r),
+          mic:(n,a,r) => add("MIC",n,a,r), fx:(n,a) => add("FX",n,a), err:(n,a) => add("ERR",n,a),
+        };
+      })();
+
+      /* ══ JUICE / SOUND ═══════════════════════════════════════════════════════ */
+      const Juice = (() => {
+        let trauma = 0, tt = 0, calm = false;
+        const cam = $("cam");
+        (function loop() {
+          if (trauma > 0 && !calm) {
+            trauma = Math.max(0, trauma - .03);
+            const s = trauma*trauma; tt += .9;
+            cam.style.transform = `translate(${12*s*Math.sin(tt*1.7)}px, ${9*s*Math.sin(tt*2.3)}px)`;
+            if (trauma === 0) cam.style.transform = "";
+          }
+          requestAnimationFrame(loop);
+        })();
+        return {
+          setCalm:(v) => { calm = v; document.body.classList.toggle("calm", v); if (v) cam.style.transform = ""; },
+          shake:(a) => { trauma = Math.min(1, trauma+a); },
+          pop(el, sx = 1.3, sy = .75) { if (!el || calm) return;
+            el.style.transition = "none"; el.style.transform = `scale(${sx},${sy})`;
+            requestAnimationFrame(() => { el.style.transition = "transform .26s var(--pop)"; el.style.transform = "scale(1)"; }); },
+          confetti(n) { if (calm) return;
+            const cols = ["#ffb224","#ef5b3f","#3b7ce0","#28a86b","#a469d6"];
+            for (let i = 0; i < n; i++) { const c = document.createElement("i");
+              c.className = "conf"; c.style.background = cols[i%cols.length];
+              c.style.left = Math.random()*100+"vw";
+              c.style.animation = `fall ${1+Math.random()*.9}s ${Math.random()*.4}s ease-in forwards`;
+              $("fx").appendChild(c); setTimeout(() => c.remove(), 2500); } },
+        };
+      })();
+      /* Synthesised, not shipped. Six mp3s would be six binaries in a folder where the whole
+         example is four text files, and sounds this simple are twenty lines of oscillator. */
+      const Sfx = (() => {
+        let ctx = null;
+        const tone = (freq, dur, type, gain, at = 0) => {
+          const t0 = ctx.currentTime + at;
+          const osc = ctx.createOscillator(), amp = ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, t0);
+          amp.gain.setValueAtTime(0.0001, t0);
+          amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
+          amp.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+          osc.connect(amp).connect(ctx.destination);
+          osc.start(t0); osc.stop(t0 + dur + 0.02);
+        };
+        const VOICES = {
+          tap:      () => tone(660, .05, "sine", .05),
+          pop:      () => tone(880, .07, "triangle", .06),
+          correct:  () => { tone(660, .10, "sine", .09); tone(990, .16, "sine", .07, .07); },
+          wrong:    () => { tone(220, .16, "sawtooth", .05); tone(165, .20, "sawtooth", .04, .08); },
+          levelup:  () => [523, 659, 784, 1047].forEach((f, i) => tone(f, .14, "triangle", .07, i*.07)),
+          complete: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .20, "sine", .08, i*.09)),
+        };
+        return { play(k) {
+          const v = VOICES[k]; if (!v) return;
+          // Built on the first sound rather than at load: a context created before a gesture
+          // starts suspended, and a suspended context swallows everything silently.
+          ctx ??= new (window.AudioContext ?? window.webkitAudioContext)();
+          if (ctx.state === "suspended") ctx.resume();
+          try { v(); } catch {}
+        } };
+      })();
+
+      /* ══════════════════════════════════════════════════════════════════════════
+         THE MANIPULATIVE REGISTRY
+
+         This is the extension point, and it is the only one. A manipulative implements five
+         methods, is handed a bare host element, and builds and tears down its own DOM inside it.
+         Adding one costs no tool slot, no character of her brief and no change to the six verbs
+         below — the curriculum names it by id and the dispatcher looks it up.
+
+           mount(host, task)   draw the starting state
+           demonstrate(task)   show the method. MUST return immediately: the worker aborts a tool
+                               at TOOL_DEADLINE_MS and the animation does not need her to wait
+           read()              what the learner has done, or null if this one takes no input
+           events()            drain anything that happened since the last call — see the
+                               piggyback note on the dispatcher
+           unmount()           put the host back the way you found it
+      ══════════════════════════════════════════════════════════════════════════ */
+      const SVGNS = "http://www.w3.org/2000/svg";
+      const svgIn = (parent, tag, attrs = {}, style = {}) => {
+        const e = document.createElementNS(SVGNS, tag);
+        for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+        Object.assign(e.style, style);
+        return parent.appendChild(e);
+      };
+      const svgTxt = (parent, x, y, s, fill) => {
+        const t = svgIn(parent, "text", { x, y, "text-anchor":"middle", "dominant-baseline":"central" }, { fill });
+        t.textContent = s; return t;
+      };
+      /** A manipulative declares the shape of its own canvas as a viewBox, never a pixel size:
+       *  the host stretches the plot to whatever room the workspace has, so a ten-frame gets a
+       *  wide strip and a Pythagoras square gets a box, and both grow with the window. */
+      const DEFAULT_SIZE = { w:520, h:200 };
+      const plot = (host, size = DEFAULT_SIZE) =>
+        svgIn(host, "svg", { viewBox:`0 0 ${size.w} ${size.h}`, class:"plot" });
+
+      /** Pointer position in the plot's own units.
+       *
+       *  Via getScreenCTM rather than getBoundingClientRect and a ratio of widths: the plot
+       *  preserves its aspect ratio inside the workspace, so it letterboxes, and the ratio is
+       *  wrong by exactly the size of the letterbox the moment the window is not the right
+       *  shape. Every drag below goes through here. */
+      const svgPt = (svg, e) => {
+        const m = svg.getScreenCTM();
+        if (!m) return { x:0, y:0 };
+        const p = svg.createSVGPoint();
+        p.x = e.clientX; p.y = e.clientY;
+        const q = p.matrixTransform(m.inverse());
+        return { x:q.x, y:q.y };
+      };
+      /** Direct manipulation, once, for everything below.
+       *
+       *  Pointer capture rather than window listeners, so a fast drag that leaves the element —
+       *  or the plot — keeps going, and so a second finger cannot hijack the first one's handle.
+       *  `held` is on the element for the duration, which is where the grabbing cursor and the
+       *  suspended CSS transition come from.
+       *
+       *  Two things here were each a silent, total failure of every drag on the page:
+       *
+       *  `down` runs BEFORE the capture is taken. A handler that raises its element above its
+       *  siblings does it with appendChild, appendChild on a node that already has a parent is a
+       *  remove followed by an insert, and removing the capturing element from the document is an
+       *  implicit release. Capturing first meant pointerdown arrived, nothing else did, and the
+       *  element sat there with the grabbing cursor still on it.
+       *
+       *  A tap comes back through `up` with `moved: false`, never through a click listener.
+       *  preventDefault on pointerdown suppresses the compatibility mouse events, and in Chrome
+       *  `click` is generated from those — so a bead with a click handler could be dragged and
+       *  could not be tapped, which is the one of the two a five-year-old will actually try. Not
+       *  calling preventDefault is not the fix: it is what stops a drag becoming a text selection.
+       *
+       *  `move` waits until the pointer has travelled `slop`, so a tap that wobbles is still a
+       *  tap and the caller never has to keep that bookkeeping itself. */
+      const drag = (svg, el, { down, move, up, slop = 5 } = {}) => {
+        el.classList.add("grab");
+        let p0 = { x:0, y:0 }, moved = false;
+        el.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          p0 = svgPt(svg, e); moved = false;
+          down?.(p0, e);
+          el.setPointerCapture(e.pointerId);
+          el.classList.add("held");
+        });
+        el.addEventListener("pointermove", (e) => {
+          if (!el.hasPointerCapture(e.pointerId)) return;
+          const p = svgPt(svg, e);
+          if (!moved && Math.hypot(p.x-p0.x, p.y-p0.y) < slop) return;
+          moved = true;
+          move?.(p, e);
+        });
+        const end = (e) => {
+          if (!el.hasPointerCapture(e.pointerId)) return;
+          el.releasePointerCapture(e.pointerId);
+          el.classList.remove("held");
+          up?.(svgPt(svg, e), moved);
+        };
+        el.addEventListener("pointerup", end);
+        el.addEventListener("pointercancel", end);
+        return el;
+      };
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      const at = (el, x, y) => { el.style.transform = `translate(${x}px, ${y}px)`; };
+
+      const MANIPULATIVES = {
+        /* ── Pythagoras, by rearrangement ───────────────────────────────────────
+           Two arrangements of the same square of side (a+b), holding the same four triangles.
+           One leaves a tilted hole of area c²; the other leaves two square holes of area a² and
+           b². Same square, same triangles, so the holes are equal — that is the theorem.
+
+           It used to be a dissection you watched. Watching a dissection is not doing one, and
+           "press the button and the shapes slide" is a slide with extra steps, so the four
+           triangles are now yours to move. There are seven slots for four triangles and one of
+           the seven belongs to both arrangements, which is why the corner triangle never has to
+           move — a fact you find out by trying, and never by being told.
+
+           The holes only appear when an arrangement is complete. Mid-shuffle you get a white
+           square and four triangles, which is honest: there is no hole to name yet. */
+        pythagoras_rearrange: {
+          id:"pythagoras_rearrange", ages:[11,13], takesInput:true, size:{ w:380, h:330 },
+          hint:"Drag the four triangles into the other arrangement. Same square, same triangles — so the holes are the same size.",
+          _svg:null, _host:null, _geo:null, _slots:[], _tris:[], _q:[], _lay:"c", _gen:0,
+          _tf(sl) { const { u, O } = this._geo;
+            return `translate(${O.x+sl.x*u}px, ${O.y+sl.y*u}px) rotate(${sl.deg}deg)`; },
+          /** Where the triangle's centre of area ends up in a slot. Snapping compares centres
+           *  rather than corners, because the corner a triangle is pinned by is a different
+           *  corner in each of the four rotations and dropping felt arbitrary when it did. */
+          _cen(sl) {
+            const { u, O, a, b } = this._geo;
+            const r = sl.deg*Math.PI/180, c = Math.cos(r), s = Math.sin(r);
+            const lx = b*u/3, ly = a*u/3;
+            return { x: O.x + sl.x*u + lx*c - ly*s, y: O.y + sl.y*u + lx*s + ly*c };
+          },
+          _layoutOf() {
+            const lays = this._tris.map((t) => this._slots.find((s) => s.id === t.slot).lay);
+            if (lays.every((l) => l === "c" || l === "both")) return "c";
+            if (lays.every((l) => l === "ab" || l === "both")) return "ab";
+            return "mixed";
+          },
+          _render(fromUser) {
+            const s = this._svg; if (!s) return;
+            const lay = this._layoutOf(), was = this._lay;
+            this._lay = lay;
+            s.querySelector("#pyC").style.opacity = lay === "c" ? ".6" : "0";
+            s.querySelector("#pyAB").style.opacity = lay === "ab" ? ".6" : "0";
+            if (fromUser && lay !== was && lay !== "mixed") {
+              this._q.push({ t:"arranged", as: lay });
+              Sfx.play("levelup"); Juice.confetti(18);
+              Trace.work("learner completed an arrangement", lay,
+                lay === "ab" ? "the hole is now a² + b²" : "the hole is the tilted square, c²");
+            }
+          },
+          mount(host, task) {
+            this._host = host; host.innerHTML = ""; this._q = []; this._gen++; this._lay = "c";
+            const s = this._svg = plot(host, this.size);
+            const { a, b } = task, side = a+b;
+            const SQ = 258, O = { x:61, y:24 }, u = SQ/side;
+            this._geo = { a, b, side, u, O, SQ };
+            const P = (x,y) => `${O.x+x*u},${O.y+y*u}`;
+
+            svgIn(s, "rect", { x:O.x, y:O.y, width:SQ, height:SQ, rx:4 },
+              { fill:"#fff", stroke:"var(--ink)", strokeWidth:"2.5" });
+
+            /* Both sets of holes are drawn once, under the triangles, and only their opacity
+               moves. Grouping each set with its label means one number to change, not three. */
+            const holes = (id, opacity) => svgIn(s, "g", { id }, { opacity, transition:"opacity .45s" });
+            const gC = holes("pyC", ".6"), gAB = holes("pyAB", "0");
+            svgIn(gC, "polygon", { points:[[b,0],[side,b],[a,side],[0,a]].map(([x,y]) => P(x,y)).join(" ") },
+              { fill:"var(--gold)" });
+            svgTxt(gC, O.x+SQ/2, O.y+SQ/2, "c²", "#8a5c00");
+            svgIn(gAB, "rect", { x:O.x, y:O.y, width:b*u, height:b*u }, { fill:"var(--grass)" });
+            svgIn(gAB, "rect", { x:O.x+b*u, y:O.y+b*u, width:a*u, height:a*u }, { fill:"var(--red)" });
+            svgTxt(gAB, O.x+b*u/2, O.y+b*u/2, `${b}²`, "#fff");
+            svgTxt(gAB, O.x+b*u+a*u/2, O.y+b*u+a*u/2, `${a}²`, "#fff");
+
+            /* Seven slots, four triangles, and `both` is the corner that the two arrangements
+               share. It is the reason nothing here ever needs to rotate under its own power. */
+            this._slots = [
+              { id:"c1",  lay:"c",    x:0,    y:0,    deg:0   },
+              { id:"sh",  lay:"both", x:side, y:0,    deg:90  },
+              { id:"c3",  lay:"c",    x:side, y:side, deg:180 },
+              { id:"c4",  lay:"c",    x:0,    y:side, deg:270 },
+              { id:"ab1", lay:"ab",   x:0,    y:b,    deg:0   },
+              { id:"ab3", lay:"ab",   x:b,    y:side, deg:180 },
+              { id:"ab4", lay:"ab",   x:b,    y:b,    deg:270 },
+            ];
+            const tri = `0,0 ${b*u},0 0,${a*u}`;
+            this._tris = ["c1","sh","c3","c4"].map((slot, i) => {
+              const el = svgIn(s, "polygon", { points:tri },
+                { fill:"var(--blue)", opacity:".85", stroke:"#fff", strokeWidth:"2" });
+              el.classList.add("tri");
+              const t = { i, el, slot };
+              el.style.transform = this._tf(this._slots.find((x) => x.id === slot));
+              drag(s, el, {
+                down: (p) => { t.p0 = p; t.base = this._tf(this._slots.find((x) => x.id === t.slot));
+                  s.appendChild(el); },
+                move: (p) => { el.style.transform =
+                  `translate(${p.x-t.p0.x}px, ${p.y-t.p0.y}px) ` + t.base; },
+                up: (p, moved) => {
+                  if (!moved) return;                    // a tap leaves it where it is
+                  const from = this._slots.find((x) => x.id === t.slot);
+                  const c = this._cen(from), want = { x:c.x + p.x-t.p0.x, y:c.y + p.y-t.p0.y };
+                  const taken = new Set(this._tris.filter((o) => o !== t).map((o) => o.slot));
+                  const free = this._slots.filter((sl) => !taken.has(sl.id));
+                  const best = free.reduce((m, sl) => {
+                    const d = Math.hypot(this._cen(sl).x-want.x, this._cen(sl).y-want.y);
+                    return d < m.d ? { d, sl } : m; }, { d:Infinity, sl:from });
+                  t.slot = best.sl.id;
+                  el.style.transform = this._tf(best.sl);
+                  Sfx.play("pop");
+                  this._q.push({ t:"triangle", to: t.slot });
+                  this._render(true);
+                },
+              });
+              return t;
+            });
+            svgTxt(s, O.x+SQ/2, O.y+SQ+30, `${a}² ＋ ${b}² ＝ c²`, "var(--dim)");
+            Sfx.play("pop");
+            return { legs:[a,b], showing:"the tilted square of area c²", takes_input: true,
+                     note:"they drag the four triangles between the two arrangements themselves" };
+          },
+          demonstrate(task) {
+            if (!this._svg) return { error:"nothing mounted" };
+            const { a, b } = task, gen = ++this._gen;
+            const home = this._tris.map((t) => t.slot);
+            const to = this._layoutOf() === "c" ? ["ab1","sh","ab3","ab4"] : ["c1","sh","c3","c4"];
+            const put = (ids) => {
+              if (this._gen !== gen || !this._svg) return;
+              this._tris.forEach((t, i) => { t.slot = ids[i];
+                t.el.style.transform = this._tf(this._slots.find((x) => x.id === ids[i])); });
+              this._render(false); Sfx.play("pop");
+            };
+            put(to);
+            setTimeout(() => put(home), 2600);        // shown, then handed back to the learner
+            return { explain: to[0] === "ab1"
+              ? `the same four triangles, moved: the hole is now ${a} squared plus ${b} squared, `
+                + `which is ${a*a} plus ${b*b}, so ${a*a+b*b} — and that was c squared all along`
+              : `back to one tilted square, and its area is c squared` };
+          },
+          read() { return { arrangement: this._lay }; },
+          events() { const q = this._q; this._q = []; return q; },
+          unmount() { this._gen++; if (this._host) this._host.innerHTML = "";
+            this._svg = null; this._tris = []; this._q = []; },
+        },
+
+        /* ── circle to sine ─────────────────────────────────────────────────────
+           The unit circle on the left, the wave it draws on the right, and a line joining the
+           two so the height is visibly the same number in both places. */
+        circle_sine: {
+          id:"circle_sine", ages:[13,15], takesInput:true, size:{ w:520, h:230 },
+          hint:"Drag the radius round the circle — the workspace is the answer.",
+          _svg:null, _host:null, _q:[], _th:0, _drag:false, _touched:false,
+          _C:{ x:88, y:112, r:70 }, _W:{ x0:180, x1:500, amp:70, y:112 },
+          _wx(th) { return this._W.x0 + (this._W.x1-this._W.x0) * (th/(Math.PI*2)); },
+          mount(host, task) {
+            this._host = host; host.innerHTML = ""; this._q = []; this._th = 0;
+            this._drag = false; this._touched = false;
+            const s = this._svg = plot(host, this.size), C = this._C, W = this._W;
+            svgIn(s, "line", { x1:W.x0, y1:W.y, x2:W.x1, y2:W.y },
+              { stroke:"#c9cedb", strokeWidth:"2" });
+            svgIn(s, "circle", { cx:C.x, cy:C.y, r:C.r },
+              { fill:"#fff", stroke:"var(--ink)", strokeWidth:"2.5" });
+            svgIn(s, "line", { x1:C.x-C.r-8, y1:C.y, x2:C.x+C.r+8, y2:C.y },
+              { stroke:"#c9cedb", strokeWidth:"2" });
+            for (const [th,lab] of [[0,"0"],[Math.PI/2,"90"],[Math.PI,"180"],[Math.PI*1.5,"270"]])
+              svgTxt(s, this._wx(th), W.y+W.amp+26, lab, "var(--dim)");
+            svgIn(s, "path", { id:"csWave" },
+              { fill:"none", stroke:"var(--gold)", strokeWidth:"3", strokeLinecap:"round" });
+            svgIn(s, "line", { id:"csLink" },
+              { stroke:"var(--grass)", strokeWidth:"2", strokeDasharray:"4 4" });
+            svgIn(s, "line", { id:"csRad", x1:C.x, y1:C.y },
+              { stroke:"var(--red)", strokeWidth:"3", strokeLinecap:"round" });
+            svgIn(s, "circle", { id:"csDot", r:9 }, { fill:"var(--red)" });
+            svgIn(s, "circle", { id:"csTip", r:7 }, { fill:"var(--grass)" });
+            svgTxt(s, C.x, C.y+C.r+30, "", "var(--ink)").setAttribute("id","csVal");
+
+            // The whole plot is the drag surface — the angle is whatever direction you point in.
+            const hit = svgIn(s, "rect", { x:0, y:0, width:this.size.w, height:this.size.h,
+              fill:"transparent" });
+            drag(s, hit, {
+              down:(p) => { this._drag = true; this._aim(p); },
+              move:(p) => this._aim(p),
+              up:() => { this._drag = false; },
+            });
+            this._set(0, false);
+            Sfx.play("pop");
+            return { angle_deg:0, takes_input:true, note:"they drag the radius round the circle" };
+          },
+          _aim(p) {
+            let th = Math.atan2(-(p.y-this._C.y), p.x-this._C.x);
+            if (th < 0) th += Math.PI*2;
+            this._set(th, true);
+          },
+          _set(th, fromUser) {
+            this._th = th;
+            const s = this._svg; if (!s) return;
+            const C = this._C, W = this._W, sn = Math.sin(th);
+            const px = C.x + C.r*Math.cos(th), py = C.y - C.r*sn;
+            s.querySelector("#csRad").setAttribute("x2", px);
+            s.querySelector("#csRad").setAttribute("y2", py);
+            s.querySelector("#csDot").setAttribute("cx", px);
+            s.querySelector("#csDot").setAttribute("cy", py);
+            const wx = this._wx(th), wy = W.y - W.amp*sn;
+            s.querySelector("#csTip").setAttribute("cx", wx);
+            s.querySelector("#csTip").setAttribute("cy", wy);
+            const link = s.querySelector("#csLink");
+            link.setAttribute("x1", px); link.setAttribute("y1", py);
+            link.setAttribute("x2", wx); link.setAttribute("y2", wy);
+            let d = "";
+            for (let t = 0; t <= th+1e-6; t += Math.PI/90)
+              d += `${d ? "L" : "M"} ${this._wx(t)} ${W.y - W.amp*Math.sin(t)} `;
+            s.querySelector("#csWave").setAttribute("d", d);
+            s.querySelector("#csVal").textContent =
+              `${Math.round(th*180/Math.PI)}°  ·  sin = ${sn.toFixed(2)}`;
+            if (fromUser) { this._touched = true;
+              this._q.push({ t:"angle", deg: Math.round(th*180/Math.PI), sin:+sn.toFixed(3) });
+              Trace.work("learner set angle", `${Math.round(th*180/Math.PI)}°`, `sin ${sn.toFixed(2)}`); }
+          },
+          demonstrate(task) {
+            const s = this._svg; if (!s) return { error:"nothing mounted" };
+            /* Sweeps a full turn and returns at once — the worker aborts a tool at
+               TOOL_DEADLINE_MS and this animation runs for well over a second. It also ends
+               back at zero, so it never leaves the target angle set for them. */
+            const t0 = performance.now(), DUR = 2600;
+            const step = () => {
+              if (!this._svg || this._drag) return;
+              const k = Math.min(1, (performance.now()-t0)/DUR);
+              this._set(k*Math.PI*2, false);
+              if (k < 1) requestAnimationFrame(step); else this._set(0, false);
+            };
+            requestAnimationFrame(step);
+            return { explain:"as the radius turns, its height is the wave — up to one at ninety "
+              + "degrees, back to zero at a hundred and eighty, down to minus one at two seventy" };
+          },
+          /* Untouched reads as "no answer yet", not as "sin θ is zero". The radius starts at 0°,
+             so returning a number here meant her first silent `answer` check burned a wrong
+             answer before the learner had moved anything. */
+          read() { return this._touched
+            ? { value:+Math.sin(this._th).toFixed(3),
+                angleDeg: Math.round(this._th*180/Math.PI), sin:+Math.sin(this._th).toFixed(3) }
+            : null; },
+          events() { const q = this._q; this._q = []; return q; },
+          unmount() { if (this._host) this._host.innerHTML = ""; this._svg = null; this._q = [];
+            this._touched = false; },
+        },
+
+        /* ── Bézier, by de Casteljau ────────────────────────────────────────────
+           From Pomax's "A primer on Bézier curves". The construction is the good part: at any t
+           you go the same fraction along each leg of the hull, then the same fraction along the
+           legs joining *those* points, and again, and the one point you are left with is on the
+           curve. Dragging t makes that visible in a way no still picture manages.
+
+           Threading two rings is what turns it from a toy into a task. The rings are generated by
+           picking two control points and asking the curve where it is at a third and two thirds,
+           so a solution always exists — and `demonstrate` can walk to it exactly rather than
+           nearly, because with the ends pinned the two Bernstein rows are just a 2×2 solve. */
+        bezier_casteljau: {
+          id:"bezier_casteljau", ages:[14,16], takesInput:true, size:{ w:560, h:300 },
+          hint:"Drag the two blue handles until the curve threads both rings. Drag t along the bar to watch the point being built.",
+          P0:{ x:56, y:236 }, P3:{ x:504, y:236 }, BOX:{ x0:28, y0:26, x1:532, y1:250 },
+          _svg:null, _host:null, _p:[], _t:.5, _rings:[], _q:[], _touched:false, _last:-1, _gen:0,
+          bez(p1, p2, t) {
+            const { P0, P3 } = this, m = 1-t;
+            const f = (a,b,c,d) => m*m*m*a + 3*m*m*t*b + 3*m*t*t*c + t*t*t*d;
+            return { x:f(P0.x,p1.x,p2.x,P3.x), y:f(P0.y,p1.y,p2.y,P3.y) };
+          },
+          /** The control points whose curve passes through r1 at t=1/3 and r2 at t=2/3. Times 27
+           *  the two Bernstein rows are 12·P1 + 6·P2 and 6·P1 + 12·P2, which inverts by hand. */
+          solve(r1, r2) {
+            const { P0, P3 } = this;
+            const A = { x:27*r1.x - 8*P0.x - P3.x, y:27*r1.y - 8*P0.y - P3.y };
+            const B = { x:27*r2.x - P0.x - 8*P3.x, y:27*r2.y - P0.y - 8*P3.y };
+            return [{ x:(2*A.x-B.x)/18, y:(2*A.y-B.y)/18 },
+                    { x:(2*B.x-A.x)/18, y:(2*B.y-A.y)/18 }];
+          },
+          _tx(t) { return this.P0.x + (this.P3.x-this.P0.x)*t; },
+          _hits() {
+            const pts = [];
+            for (let i = 0; i <= 200; i++) pts.push(this.bez(this._p[0], this._p[1], i/200));
+            return this._rings.map((r) => pts.some((q) => Math.hypot(q.x-r.x, q.y-r.y) <= r.r));
+          },
+          _render(fromUser) {
+            const s = this._svg; if (!s) return;
+            const [p1, p2] = this._p, t = this._t;
+            let d = "";
+            for (let i = 0; i <= 140; i++) { const q = this.bez(p1, p2, i/140);
+              d += `${i ? "L" : "M"} ${q.x.toFixed(1)} ${q.y.toFixed(1)} `; }
+            s.querySelector("#bzCurve").setAttribute("d", d);
+            s.querySelector("#bzHull").setAttribute("points",
+              `${this.P0.x},${this.P0.y} ${p1.x},${p1.y} ${p2.x},${p2.y} ${this.P3.x},${this.P3.y}`);
+            at(s.querySelector("#bzH0"), p1.x, p1.y);
+            at(s.querySelector("#bzH1"), p2.x, p2.y);
+            at(s.querySelector("#bzKnob"), this._tx(t)-this.P0.x, 0);
+            s.querySelector("#bzT").textContent = `t = ${t.toFixed(2)}`;
+
+            // de Casteljau itself: lerp the hull, lerp the result, until one point is left.
+            const g = s.querySelector("#bzC");
+            g.innerHTML = "";
+            let level = [this.P0, p1, p2, this.P3];
+            while (level.length > 1) {
+              const next = level.slice(0, -1).map((q, i) => ({
+                x: q.x + (level[i+1].x-q.x)*t, y: q.y + (level[i+1].y-q.y)*t }));
+              const last = next.length === 1;
+              if (!last) svgIn(g, "polyline", { points: next.map((q) => `${q.x},${q.y}`).join(" ") },
+                { fill:"none", stroke:"var(--plum)", strokeWidth:"2", strokeDasharray:"5 4" });
+              for (const q of next) svgIn(g, "circle", { cx:q.x, cy:q.y, r: last ? 8 : 5 },
+                { fill: last ? "var(--grass)" : "var(--plum)" });
+              level = next;
+            }
+            const hits = this._hits();
+            this._rings.forEach((r, i) => {
+              const el = s.querySelector("#bzR"+i);
+              el.style.stroke = hits[i] ? "var(--grass)" : "#b9c0d0";
+              el.style.strokeWidth = hits[i] ? "5" : "3.5";
+            });
+            if (!fromUser) return;
+            this._touched = true;
+            const n = hits.filter(Boolean).length;
+            if (n === this._last) return;
+            this._last = n;
+            this._q.push({ t:"threaded", rings:n, of:this._rings.length });
+            if (n === this._rings.length) { Sfx.play("correct"); Juice.confetti(16); }
+            Trace.work("learner threaded", `${n} of ${this._rings.length} rings`, "");
+          },
+          mount(host, task) {
+            this._host = host; host.innerHTML = ""; this._q = [];
+            this._touched = false; this._last = -1; this._t = .5; this._gen++;
+            this._rings = task.rings;
+            const s = this._svg = plot(host, this.size), { P0, P3, BOX } = this;
+            // Starts as a straight line, so the first drag is what bends it.
+            this._p = [{ x:P0.x + (P3.x-P0.x)/3, y:P0.y }, { x:P0.x + 2*(P3.x-P0.x)/3, y:P0.y }];
+
+            svgIn(s, "rect", { x:BOX.x0, y:BOX.y0, width:BOX.x1-BOX.x0, height:BOX.y1-BOX.y0, rx:10 },
+              { fill:"none", stroke:"var(--line)", strokeWidth:"2" });
+            this._rings.forEach((r, i) => svgIn(s, "circle", { id:"bzR"+i, cx:r.x, cy:r.y, r:r.r },
+              { fill:"none", stroke:"#b9c0d0", strokeWidth:"3.5", transition:"stroke .2s" }));
+            svgIn(s, "polyline", { id:"bzHull" },
+              { fill:"none", stroke:"#c9cedb", strokeWidth:"2", strokeDasharray:"6 5" });
+            svgIn(s, "path", { id:"bzCurve" },
+              { fill:"none", stroke:"var(--gold)", strokeWidth:"4", strokeLinecap:"round" });
+            svgIn(s, "g", { id:"bzC" });
+            for (const p of [P0, P3]) svgIn(s, "circle", { cx:p.x, cy:p.y, r:7 }, { fill:"var(--ink)" });
+
+            const handle = (id, idx) => {
+              const el = svgIn(s, "circle", { id, cx:0, cy:0, r:13 },
+                { fill:"var(--blue)", stroke:"#fff", strokeWidth:"3" });
+              el.classList.add("knob");
+              let off = { x:0, y:0 };
+              drag(s, el, {
+                down:(p) => { off = { x:p.x-this._p[idx].x, y:p.y-this._p[idx].y }; },
+                move:(p) => { this._gen++;   // taking hold of it cancels a demonstrate mid-glide
+                              this._p[idx] = { x: clamp(p.x-off.x, BOX.x0, BOX.x1),
+                                               y: clamp(p.y-off.y, BOX.y0, BOX.y1) };
+                              this._render(true); },
+              });
+            };
+            handle("bzH0", 0); handle("bzH1", 1);
+
+            svgIn(s, "line", { x1:P0.x, y1:278, x2:P3.x, y2:278 },
+              { stroke:"var(--line)", strokeWidth:"6", strokeLinecap:"round" });
+            const knob = svgIn(s, "circle", { id:"bzKnob", cx:P0.x, cy:278, r:11 },
+              { fill:"var(--plum)", stroke:"#fff", strokeWidth:"3" });
+            knob.classList.add("knob");
+            const bar = svgIn(s, "rect", { x:P0.x-16, y:262, width:P3.x-P0.x+32, height:32 },
+              { fill:"transparent" });
+            const setT = (p) => { this._gen++;
+              this._t = clamp((p.x-P0.x)/(P3.x-P0.x), 0, 1); this._render(true); };
+            drag(s, bar, { down:(p) => { knob.classList.add("held"); setT(p); },
+                           move:setT, up:() => knob.classList.remove("held") });
+            svgTxt(s, 34, 278, "", "var(--dim)").setAttribute("id", "bzT");
+
+            this._render(false);
+            Sfx.play("pop");
+            return { rings:this._rings.length, threaded:0, takes_input:true,
+                     note:"they drag two control handles; how many rings the curve threads is their answer" };
+          },
+          demonstrate(task) {
+            if (!this._svg) return { error:"nothing mounted" };
+            const gen = ++this._gen, home = this._p.map((q) => ({ ...q })), t0 = this._t;
+            const sol = this.solve(this._rings[0], this._rings[1]);
+            const t1 = performance.now();
+            const sweep = () => {                    // first, what t actually does
+              if (this._gen !== gen || !this._svg) return;
+              const k = Math.min(1, (performance.now()-t1)/1800);
+              this._t = k; this._render(false);
+              if (k < 1) return void requestAnimationFrame(sweep);
+              const t2 = performance.now();
+              const glide = () => {                  // then, where the handles have to be
+                if (this._gen !== gen || !this._svg) return;
+                const j = Math.min(1, (performance.now()-t2)/900), e = j*j*(3-2*j);
+                this._p = home.map((q, i) => ({ x:q.x + (sol[i].x-q.x)*e,
+                                                y:q.y + (sol[i].y-q.y)*e }));
+                this._render(false);
+                if (j < 1) return void requestAnimationFrame(glide);
+                setTimeout(() => {                   // shown, then handed back to the learner
+                  if (this._gen !== gen || !this._svg) return;
+                  this._p = home.map((q) => ({ ...q })); this._t = t0; this._render(false);
+                }, 1600);
+              };
+              requestAnimationFrame(glide);
+            };
+            requestAnimationFrame(sweep);
+            return { explain:"go the same fraction along each straight leg, then the same fraction "
+              + "along the legs joining those points, and again — the point you are left with is "
+              + "on the curve. The handles pull the curve; they are not on it" };
+          },
+          read() { return this._touched
+            ? { value: this._hits().filter(Boolean).length, of: this._rings.length } : null; },
+          events() { const q = this._q; this._q = []; return q; },
+          unmount() { this._gen++; if (this._host) this._host.innerHTML = "";
+            this._svg = null; this._q = []; this._touched = false; },
+        },
+
+        /* ── Fourier epicycles ──────────────────────────────────────────────────
+           Jez Swanson's interactive introduction to Fourier transforms and Jack Schaedler's
+           "Seeing circles, sines and signals", which is where the chain of circles drawing a wave
+           comes from. Four odd harmonics, an amplitude each, and the epicycle tip and the wave
+           are the same height by construction rather than by coincidence: one scale for both.
+
+           This is the level the curriculum table had been claiming for two revisions, and the
+           reason it was last is real — a continuous approximation has no crisp right answer. So
+           the check degrades to a number: how close the wave is to the target, as a percentage,
+           which is discrete enough to mark and honest about what it is measuring.
+
+           The thing to find is that the amplitudes are 1, a third, a fifth, a seventh. */
+        fourier_epicycles: {
+          id:"fourier_epicycles", ages:[15,16], takesInput:true, size:{ w:560, h:336 },
+          hint:"Drag the four sliders until your wave sits on the grey one. Each slider is one circle in the chain.",
+          HARM:[1,3,5,7], S:46, BAND:78,
+          _C:{ x:128, y:112 }, _W:{ x0:258, x1:548 },
+          _MIX:{ y0:238, y1:302, xs:[100,220,340,460] },
+          _svg:null, _host:null, _a:[0,0,0,0], _q:[], _touched:false, _last:-1,
+          _gen:0, _life:0, _th:0,
+          _vmax(i) { return 1.35/this.HARM[i]; },
+          _target() { return this.HARM.map((k) => 1/k); },
+          _sum(th, a) { return this.HARM.reduce((v, k, i) => v + a[i]*Math.sin(k*th), 0); },
+          _wx(th) { return this._W.x0 + (th/(Math.PI*2))*(this._W.x1-this._W.x0); },
+          _wy(v) { return clamp(this._C.y - this.S*v, this._C.y-this.BAND, this._C.y+this.BAND); },
+          _path(a) {
+            let d = "";
+            for (let i = 0; i <= 180; i++) { const th = i/180*Math.PI*2;
+              d += `${i ? "L" : "M"} ${this._wx(th).toFixed(1)} ${this._wy(this._sum(th,a)).toFixed(1)} `; }
+            return d;
+          },
+          _fit() {
+            const tgt = this._target();
+            let e = 0, b = 0;
+            for (let i = 0; i < 180; i++) {
+              const th = i/180*Math.PI*2, g = this._sum(th, tgt);
+              e += (this._sum(th, this._a)-g)**2; b += g*g;
+            }
+            return Math.max(0, Math.round(100*(1 - Math.sqrt(e/b))));
+          },
+          _sy(i, v) { const M = this._MIX; return M.y1 - (v/this._vmax(i))*(M.y1-M.y0); },
+          _redraw(fromUser) {
+            const s = this._svg; if (!s) return;
+            s.querySelector("#foMine").setAttribute("d", this._path(this._a));
+            this._a.forEach((v, i) => {
+              at(s.querySelector("#foK"+i), 0, this._sy(i, v)-this._MIX.y1);
+              s.querySelector("#foV"+i).textContent = v.toFixed(2);
+            });
+            const fit = this._fit();
+            s.querySelector("#foFit").textContent = `fit ${fit}%`;
+            s.querySelector("#foFit").style.fill = fit >= 88 ? "var(--grass)" : "var(--dim)";
+            if (!fromUser) return;
+            this._touched = true;
+            if (fit === this._last) return;
+            const was = this._last; this._last = fit;
+            this._q.push({ t:"fit", percent:fit });
+            if (fit >= 88 && was < 88) { Sfx.play("correct"); Juice.confetti(18); }
+            Trace.work("learner tuned harmonics", this._a.map((v) => v.toFixed(2)).join(" "), `fit ${fit}%`);
+          },
+          _tick() {
+            const s = this._svg; if (!s) return;
+            if (!document.body.classList.contains("calm")) this._th = (this._th + .016) % (Math.PI*2);
+            let x = this._C.x, y = this._C.y;
+            const pts = [`${x},${y}`];
+            this._a.forEach((v, i) => {
+              const k = this.HARM[i], r = this.S*v;
+              const c = s.querySelector("#foC"+i);
+              c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", Math.max(0, r));
+              x += r*Math.cos(k*this._th); y -= r*Math.sin(k*this._th);
+              pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+            });
+            s.querySelector("#foArm").setAttribute("points", pts.join(" "));
+            const tip = s.querySelector("#foTip");
+            tip.setAttribute("cx", x); tip.setAttribute("cy", y);
+            const wx = this._wx(this._th), wy = this._wy(this._sum(this._th, this._a));
+            const mk = s.querySelector("#foMk");
+            mk.setAttribute("cx", wx); mk.setAttribute("cy", wy);
+            const ln = s.querySelector("#foLink");
+            ln.setAttribute("x1", x); ln.setAttribute("y1", y);
+            ln.setAttribute("x2", wx); ln.setAttribute("y2", wy);
+          },
+          mount(host, task) {
+            this._host = host; host.innerHTML = "";
+            this._q = []; this._touched = false; this._last = -1; this._th = 0; this._a = [0,0,0,0];
+            const life = ++this._life;
+            this._gen++;
+            const s = this._svg = plot(host, this.size), C = this._C, W = this._W, M = this._MIX;
+            svgIn(s, "line", { x1:W.x0, y1:C.y, x2:W.x1, y2:C.y },
+              { stroke:"#e2e5ec", strokeWidth:"2" });
+            svgIn(s, "line", { x1:C.x-this.BAND-6, y1:C.y, x2:C.x+this.BAND+6, y2:C.y },
+              { stroke:"#e2e5ec", strokeWidth:"2" });
+            svgIn(s, "path", { d:this._path(this._target()) },
+              { fill:"none", stroke:"#bcc3d2", strokeWidth:"3", strokeDasharray:"7 6" });
+            for (let i = 0; i < 4; i++) svgIn(s, "circle", { id:"foC"+i, cx:C.x, cy:C.y, r:0 },
+              { fill:"none", stroke:"#ccd3e0", strokeWidth:"1.5" });
+            svgIn(s, "polyline", { id:"foArm" },
+              { fill:"none", stroke:"var(--red)", strokeWidth:"3", strokeLinejoin:"round" });
+            svgIn(s, "line", { id:"foLink" },
+              { stroke:"var(--grass)", strokeWidth:"1.5", strokeDasharray:"4 4" });
+            svgIn(s, "path", { id:"foMine" },
+              { fill:"none", stroke:"var(--gold)", strokeWidth:"3.5", strokeLinecap:"round" });
+            svgIn(s, "circle", { id:"foTip", r:6 }, { fill:"var(--red)" });
+            svgIn(s, "circle", { id:"foMk", r:6 }, { fill:"var(--grass)" });
+            svgTxt(s, 508, 22, "", "var(--dim)").setAttribute("id", "foFit");
+            svgTxt(s, 300, 22, "grey is the target", "#bcc3d2");
+
+            M.xs.forEach((x, i) => {
+              svgTxt(s, x, 226, this.HARM[i] === 1 ? "sin θ" : `sin ${this.HARM[i]}θ`, "var(--dim)");
+              svgIn(s, "line", { x1:x, y1:M.y0, x2:x, y2:M.y1 },
+                { stroke:"var(--line)", strokeWidth:"6", strokeLinecap:"round" });
+              const k = svgIn(s, "circle", { id:"foK"+i, cx:x, cy:M.y1, r:11 },
+                { fill:"var(--gold)", stroke:"#fff", strokeWidth:"3" });
+              k.classList.add("knob");
+              svgTxt(s, x, 322, "0.00", "var(--dim)").setAttribute("id", "foV"+i);
+              const hit = svgIn(s, "rect", { x:x-24, y:M.y0-16, width:48, height:M.y1-M.y0+32 },
+                { fill:"transparent" });
+              const set = (p) => {
+                this._gen++;                         // a drag cancels a demonstrate mid-glide
+                this._a[i] = clamp((M.y1-p.y)/(M.y1-M.y0)*this._vmax(i), 0, this._vmax(i));
+                this._redraw(true);
+              };
+              drag(s, hit, { down:(p) => { k.classList.add("held"); set(p); },
+                             move:set, up:() => k.classList.remove("held") });
+            });
+
+            this._redraw(false);
+            /* One loop for the whole chain, keyed on `_life` rather than `_gen`: `_gen` is bumped
+               by every drag and by every demonstrate, and the circles have to keep turning
+               through both. It stops itself when the plug is torn down or remounted. */
+            const spin = () => { if (this._life !== life || !this._svg) return;
+              this._tick(); requestAnimationFrame(spin); };
+            requestAnimationFrame(spin);
+            Sfx.play("pop");
+            return { harmonics:this.HARM, amplitudes:[0,0,0,0], fit_percent:this._fit(),
+                     takes_input:true, note:"they drag four amplitudes; the fit percentage is their answer" };
+          },
+          demonstrate(task) {
+            if (!this._svg) return { error:"nothing mounted" };
+            const gen = ++this._gen, home = [...this._a], tgt = this._target();
+            const t0 = performance.now();
+            const glide = () => {
+              if (this._gen !== gen || !this._svg) return;
+              const k = Math.min(1, (performance.now()-t0)/1100), e = k*k*(3-2*k);
+              this._a = home.map((v, i) => v + (tgt[i]-v)*e);
+              this._redraw(false);
+              if (k < 1) return void requestAnimationFrame(glide);
+              setTimeout(() => {                     // shown, then handed back to the learner
+                if (this._gen !== gen || !this._svg) return;
+                this._a = [...home]; this._redraw(false);
+              }, 1800);
+            };
+            requestAnimationFrame(glide);
+            return { explain:"a square wave is the odd harmonics only, and each one is smaller: "
+              + "the whole of the first, a third of the third, a fifth of the fifth, a seventh of "
+              + "the seventh. Every extra one squares the corners a little more" };
+          },
+          read() { return this._touched ? { value: this._fit() } : null; },
+          events() { const q = this._q; this._q = []; return q; },
+          unmount() { this._gen++; this._life++; if (this._host) this._host.innerHTML = "";
+            this._svg = null; this._q = []; this._touched = false; },
+        },
+      };
+
+      /* ══════════════════════════════════════════════════════════════════════════
+         THE CURRICULUM REGISTRY
+
+         Data, not control flow. A level names a manipulative by id, knows how to generate a task
+         and how to mark one, and declares who it is for. Adding a level is pushing an object.
+
+         The entries with a `planned` tag are not implemented — they are the P1-P3 cases from the
+         architecture page, left here on purpose. They cost nothing, they prove the schema already
+         accommodates a Bézier curve and a Fourier series, and a roadmap you can see in the
+         product is worth more than one in a document nobody opens.
+      ══════════════════════════════════════════════════════════════════════════ */
+      const blank = (v) => v == null ? `<span class="blank"></span>` : `<b id="ans">${v}</b>`;
+
+      /* `check` and `answerFrom` live on the LEVEL rather than in the answer verb: P0 got away
+         with hardcoding `given === task.want` because everything was arithmetic, and the first
+         trigonometry level broke that immediately — "sin θ is 0.5" is a tolerance, not an
+         equality, and the answer does not come from the keypad at all.
+
+         The levels whose answer can only come off the workspace. Not a stylistic choice: the
+         answer to "thread both rings" is the number two, and a keypad next to that question is a
+         button marked *win*. Where doing the thing is the whole task, her ears and the keypad are
+         both shut off and `read()` is the only way in. */
+      const onWorkspace = {
+        input:"workspace",
+        answerFrom: ({ work }) => work?.value ?? null,
+      };
+      // c stays inside 20, so Pythagoras is the one level left that still wants the keypad.
+      const TRIPLES = [[3,4,5],[6,8,10],[5,12,13],[9,12,15],[8,15,17],[12,16,20]];
+
+      const CURRICULUM = [
+        { id:"geo.pythagoras", strand:"geometry", name:"Pythagoras", ages:[11,13], difficulty:5,
+          manipulative:"pythagoras_rearrange", input:"keypad20",
+          gen() { const [a,b,c] = TRIPLES[Math.floor(Math.random()*TRIPLES.length)];
+            return { a, b, want:c }; },
+          prompt: (t, v) => `${t.a}² ＋ ${t.b}² ＝ ` + blank(v) + "²",
+          say: (t) => `a right angled triangle with legs ${t.a} and ${t.b} — how long is the hypotenuse`,
+          check: (t, g) => ({ correct: g === t.want, expected: t.want }),
+          // The rearrangement is the argument, not the answer, so this one keeps the keypad.
+          answerFrom: ({ heard, tapped, typed }) =>
+            typeof heard === "number" ? heard : (typed ?? tapped ?? null) },
+
+        { ...onWorkspace, id:"geo.bezier", strand:"geometry", name:"Bézier · de Casteljau",
+          ages:[14,16], difficulty:7, manipulative:"bezier_casteljau",
+          /* The rings come off a curve that already exists, so every task is solvable and
+             `demonstrate` can walk to the real answer. Rejecting the near-together and the
+             hugging-the-baseline cases is the difference between a puzzle and a formality. */
+          gen() {
+            const M = MANIPULATIVES.bezier_casteljau, B = M.BOX;
+            const rnd = () => ({ x: B.x0+70 + Math.random()*(B.x1-B.x0-140),
+                                 y: B.y0+16 + Math.random()*(B.y1-B.y0-96) });
+            for (let i = 0; i < 60; i++) {
+              const c1 = rnd(), c2 = rnd();
+              const r1 = M.bez(c1, c2, 1/3), r2 = M.bez(c1, c2, 2/3);
+              if (Math.hypot(r1.x-r2.x, r1.y-r2.y) < 120) continue;
+              if (Math.min(r1.y, r2.y) > B.y1-70) continue;
+              return { rings:[{ ...r1, r:24 }, { ...r2, r:24 }] };
+            }
+            return { rings:[{ x:190, y:96, r:24 }, { x:390, y:170, r:24 }] };
+          },
+          prompt: (t, v) => v == null ? "Thread the curve through both rings"
+            : `${blank(v)} of ${t.rings.length} rings threaded`,
+          say: (t) => "bend the curve with the two handles until it goes through both rings",
+          check: (t, g) => ({ correct: g === t.rings.length, expected: t.rings.length }) },
+
+        { ...onWorkspace, id:"trig.circlesine", strand:"trigonometry", name:"Circle to sine",
+          ages:[13,15], difficulty:6, manipulative:"circle_sine",
+          // Never 0: the radius starts at 0°, so a target of zero would already be satisfied.
+          gen() { const T = [1, .5, -1, -.5]; return { target: T[Math.floor(Math.random()*T.length)] }; },
+          prompt: (t, v) => `sin θ ＝ ${t.target}` + (v == null ? " " + blank(null) : `　·　you made ${blank(v)}`),
+          say: (t) => `turn the radius until the height is ${t.target}`,
+          // A tolerance, not an equality — and both angles that satisfy it are right.
+          check: (t, g) => ({ correct: Math.abs(g - t.target) < .06, expected: t.target }) },
+
+        { ...onWorkspace, id:"sig.fourier", strand:"signals", name:"Fourier series", ages:[15,16],
+          difficulty:9, manipulative:"fourier_epicycles",
+          gen() { return { need: 88 }; },
+          prompt: (t, v) => v == null ? `Match the grey wave — ${t.need}% or better`
+            : `fit ${blank(v)}%`,
+          say: (t) => "build the wave: set the four amplitudes until yours sits on the grey one",
+          // No crisp right answer exists, so the check degrades to a threshold on the fit.
+          check: (t, g) => ({ correct: g >= t.need, expected: t.need }) },
+
+        /* Still declared, still dimmed, still costing nothing. Both are from the same list the
+           four new manipulatives came out of, and both are here for the same reason the last two
+           were: a roadmap you can see in the product beats one in a document nobody opens. */
+        { id:"geo.euclidea", strand:"geometry", name:"Straightedge & compass", ages:[13,16],
+          difficulty:8, manipulative:"euclid_construct", planned:"next" },
+        { id:"sig.aliasing", strand:"signals", name:"Sampling & aliasing", ages:[15,16],
+          difficulty:10, manipulative:"sampling_alias", planned:"next" },
+      ];
+      const RUNNABLE = CURRICULUM.filter((l) => l.gen);
+      const STRAND_NAMES = { geometry:"Geometry", trigonometry:"Trigonometry", signals:"Signals" };
+
+      /* ══ SESSION STATE ═══════════════════════════════════════════════════════ */
+      const RUN = 10;
+      const save = JSON.parse(localStorage.getItem("mathstudio")
+        || '{"levelId":"geo.pythagoras","acc":null}');
+      const persist = () => localStorage.setItem("mathstudio", JSON.stringify(save));
+      let level = RUNNABLE.find((l) => l.id === save.levelId) ?? RUNNABLE[0];
+      let task = null, active = null;          // active = the mounted manipulative
+      let done = 0, right = 0, streak = 0, wrongRun = 0, history = [], t0 = 0;
+
+      function mountFor(t) {
+        const next = MANIPULATIVES[level.manipulative];
+        if (active && active !== next) active.unmount();
+        active = next ?? null;
+        if (!active) return { error:`manipulative "${level.manipulative}" is not implemented yet` };
+        /* The one thing the host takes from the plugin is the shape of its canvas, as a ratio.
+           A ten-frame wants a wide strip and a Pythagoras square wants a box, and the picture
+           then grows with the window instead of sitting at 484 pixels in the middle of it. */
+        const size = active.size ?? DEFAULT_SIZE;
+        $("work").style.aspectRatio = `${size.w} / ${size.h}`;
+        $("work").style.maxWidth = Math.round(size.w * 1.5) + "px";
+        const out = active.mount($("work"), t) ?? {};
+        Trace.work("mount", level.manipulative, JSON.stringify(out));
+        return { manipulative: active.id, ...out };
+      }
+
+      const renderQ = (v) => {
+        $("q").innerHTML = task ? level.prompt(task, v) : "— — —";
+        const n = $("q").textContent.trim().length;
+        $("q").classList.toggle("long", n > 18);
+        $("q").classList.toggle("xlong", n > 32);
+      };
+
+      /** Picking a level shows it immediately, without a call.
+       *
+       *  Manipulatives used to mount only when she called `show`, so choosing Geometry left an
+       *  empty workspace with the 0-20 keypad still under it — and the only thing on screen was
+       *  the keypad, which reads as "this is still a calculator". A course picker that does not
+       *  show you the course is not a course picker. */
+      function preview() {
+        task = { ...level.gen(), helped:false };
+        renderQ(null);
+        mountFor(task);
+        hud();
+      }
+
+      function hud() {
+        $("lvchip").innerHTML = `${STRAND_NAMES[level.strand]} · ${level.name} <i>▾</i>`;
+        $("cnt").textContent = `${done} / ${RUN}`;
+        $("stk").textContent = `streak ${streak}`;
+        $("stk").classList.toggle("hot", streak >= 3);
+        $("bar").style.width = `${Math.min(100,(done/RUN)*100)}%`;
+        /* A keypad is the wrong instrument for "turn the radius until the height is 0.5". The
+           sentence under the workspace belongs to the MANIPULATIVE too: it used to be a growing
+           if-else in here that had to be edited every time one was added, which is exactly the
+           coupling the registry exists to prevent. */
+        const plug = MANIPULATIVES[level.manipulative];
+        const onWork = level.input === "workspace";
+        $("pad").style.display = onWork ? "none" : "grid";
+        $("inputhint").textContent = onWork
+          ? (plug?.hint ?? "The workspace is the answer.")
+          : plug?.hint
+            ? plug.hint + "  Or say it, type it, or tap a number."
+            : "Say the answer, type it, or tap a number.";
+        // On a workspace level a typed number is not an answer, so the box stops offering to be one.
+        $("tellin").placeholder = onWork
+          ? "Say something to her…"
+          : "Type an answer, or say something to her…";
+        document.querySelectorAll(".lvl").forEach((el) =>
+          el.classList.toggle("on", el.dataset.id === level.id));
+      }
+
+      /** Move within the current strand, by difficulty, skipping anything not implemented. */
+      function shift(dir) {
+        const peers = RUNNABLE.filter((l) => l.strand === level.strand)
+          .sort((a,b) => a.difficulty - b.difficulty);
+        const i = peers.indexOf(level);
+        const next = peers[i+dir];
+        if (!next) return false;
+        level = next; save.levelId = level.id; persist();
+        return true;
+      }
+
+      function reportCard() {
+        const secs = Math.round((performance.now()-t0)/1000);
+        const acc = done ? right/done : 0;
+        const medal = acc >= .9 ? "🥇" : acc >= .7 ? "🥈" : "🥉";
+        const helped = history.filter((h) => h.helped).length;
+        save.acc = acc; save.levelId = level.id; persist();
+        $("report").innerHTML = `<h3>Run complete</h3><div class="big">${medal} ${"★".repeat(right)}</div>
+          <table><tr><td>Correct</td><td>${right} / ${done}</td></tr>
+          <tr><td>Time</td><td>${secs}s</td></tr>
+          <tr><td>Finished on</td><td>${level.name}</td></tr>
+          <tr><td>Times she demonstrated</td><td>${helped}</td></tr></table>
+          <button style="margin-top:14px;width:100%" id="closerep">OK</button>`;
+        $("sheet").classList.add("on");
+        $("closerep").onclick = () => $("sheet").classList.remove("on");
+        Sfx.play("complete"); Juice.shake(.6); Juice.confetti(120);
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════════
+         THE SIX VERBS
+
+         None of them names a manipulative and none of them ever will. Each one looks the current
+         level up in the curriculum, finds the plugin it names, and calls the matching method —
+         so a new manipulative arrives with the registry entry and nothing here is touched.
+
+         What she is looking at reaches her through the RESULT, in `explain`, rather than through
+         the tool's name. That is the trade that keeps the list at six: a generic verb tells the
+         model less than `show_bezier_control_points` would, and the return value gives it back.
+      ══════════════════════════════════════════════════════════════════════════ */
+      const VERBS = {
+        next_task: {
+          description:"The next thing to work on. The system sets the difficulty — never invent your own. Ten per run.",
+          parameters:{ type:"object", properties:{} },
+          execute: () => {
+            if (done >= RUN) return { ok:false, finished:true, note:"ten done — call celebrate kind=finished" };
+            if (!t0) t0 = performance.now();
+            task = { ...level.gen(), helped:false };
+            renderQ(null); hud();
+            if (active) { active.unmount(); active = null; }
+            $("work").innerHTML = "";
+            return { level: level.name, index: done+1, of: RUN,
+                     say: level.say(task) };
+          } },
+        show: {
+          description:"Put the current task on the workspace. It picks the right picture for this level by itself.",
+          parameters:{ type:"object", properties:{} },
+          execute: () => {
+            if (!task) return { ok:false, error:"call next_task first" };
+            return { ok:true, ...mountFor(task) };
+          } },
+        demonstrate: {
+          description:"Show the method for this task — things move on screen. Use it when they get it wrong.",
+          parameters:{ type:"object", properties:{} },
+          execute: () => {
+            if (!task) return { ok:false, error:"call next_task first" };
+            if (!active) mountFor(task);               // she may demonstrate without showing first
+            if (!active) return { ok:false, error:"no manipulative for this level" };
+            task.helped = true;
+            /* Returns at once, every time. The worker aborts a tool at TOOL_DEADLINE_MS and the
+               animation runs on the page regardless — awaiting it is pure dead air. */
+            const out = active.demonstrate(task) ?? {};
+            Trace.work("demonstrate", active.id, out.explain ?? "");
+            return { ok:true, note:"it is moving on screen now", ...out };
+          } },
+        answer: {
+          description:"Submit and check their answer. Fill heard if you caught it, leave it out if not. Never say right or wrong before calling this.",
+          parameters:{ type:"object", properties:{ heard:{ type:"number" } } },
+          execute: ({ heard }) => {
+            if (!task) return { ok:false, error:"no task yet" };
+            /* Marking mid-drag is marking a hand that has not landed. Before the quiet gate, a
+               silent ten-second check that happened to land during a drag read the workspace
+               half-moved and scored it. */
+            if (typeof heard !== "number" && Activity.busy())
+              return { answered:false, still_working:true,
+                       note:"they are still moving it — wait a few seconds and check again" };
+            // Four ways in — her ears, the keypad, the box under the board, and the workspace —
+            // and the LEVEL decides which of them counts and what counts as right.
+            const work = active?.read?.() ?? null;
+            const given = level.answerFrom({ heard, tapped, typed, work });
+            if (given == null) return { answered:false,
+              note: level.input === "workspace"
+                ? "they have not moved the workspace yet — wait, or tell them to drag it"
+                : "nothing said, nothing typed or tapped and nothing on the workspace — wait, or suggest working on screen" };
+            /* Captured before the reset below, not after. `tapped = null` runs first, so the
+               old version computed this against variables it had just cleared and reported
+               "workspace" for every answer including the ones it had heard. */
+            const source = typeof heard === "number" ? "listened"
+                         : typed != null ? "typed" : tapped != null ? "tapped" : "workspace";
+            const verdict = level.check(task, given);
+            const ok = verdict.correct;
+            done++; if (ok) { right++; streak++; wrongRun = 0; } else { streak = 0; wrongRun++; }
+            history.push({ ...task, ok });
+            renderQ(given); hud(); tapped = null; typed = null;
+            if (ok) { Sfx.play("correct"); Juice.shake(.16); Juice.pop($("ans")); Juice.confetti(14); }
+            else { Sfx.play("wrong"); Juice.shake(.24); Juice.pop($("ans"),.88,1.14); }
+            let up = false;
+            if (ok && streak >= 3) { up = shift(+1); if (up) { streak = 0;
+              Sfx.play("levelup"); Juice.shake(.4); Juice.confetti(46); } hud(); }
+            if (!ok && wrongRun >= 2) { if (shift(-1)) wrongRun = 0; hud(); }
+            return { answered:true, value:given, correct:ok, expected:verdict.expected,
+                     source,
+                     levelled_up: up, now_on: level.name, remaining: RUN-done };
+          } },
+        progress: {
+          description:"How far they have got.",
+          parameters:{ type:"object", properties:{} },
+          execute: () => ({ done, right, streak, of: RUN,
+                            level: level.name, strand: STRAND_NAMES[level.strand],
+                            difficulty: level.difficulty }) },
+        celebrate: {
+          description:"Feedback at the clear moments: correct / levelup / finished. Call it before you speak.",
+          parameters:{ type:"object", properties:{ kind:{ type:"string", enum:["correct","levelup","finished"] } },
+                       required:["kind"] },
+          execute: ({ kind }) => {
+            if (kind === "correct") { Juice.confetti(12); return { ok:true, say_hint:"praise briefly" }; }
+            if (kind === "levelup") return { ok:true, level: level.name,
+              say_hint:`tell them they have reached ${level.name}` };
+            reportCard();
+            return { ok:true, right, done, say_hint:"say the run is done, praise, ask about another" };
+          } },
+      };
+
+      /* ══ WHAT THEY DID WHILE SHE WAS NOT ASKING ═══════════════════════════════
+         The piggyback, with two rules the raw queue never had.
+
+         QUIET. Nothing is handed over until they have stopped for QUIET_MS. A drag emits an event
+         per unit of travel, so without this she is handed a hand that is still moving and talks
+         over the gesture — and `answer` grades a half-finished drag as if it were the answer.
+         While they are still going she gets `still_working` and nothing else, which her brief
+         tells her means "say nothing about it yet".
+
+         SUMMARY. The same event repeated is one line with a count, not fifteen. Tuning the
+         Fourier mixer queued fifteen `fit` events in four seconds; she needs the last one and
+         the fact that there were fifteen, not the other fourteen. */
+      const QUIET_MS = 1800, POLL_MS = 250;
+      const Activity = (() => {
+        let pending = [], lastAt = 0;
+        const pull = () => {
+          const fresh = [...Learner.drain(), ...(active?.events?.() ?? [])];
+          if (fresh.length) { pending.push(...fresh); lastAt = performance.now(); }
+        };
+        /* Drained on a timer, not only when she asks. Stamping `lastAt` at collection time made
+           the age of an event the age of her *question*: a learner who moved something once and
+           then sat still for thirty seconds was reported as still working, because the event had
+           been sitting in the manipulative's queue looking fresh the whole time. */
+        setInterval(pull, POLL_MS);
+        const squash = (evts) => {
+          const by = new Map();
+          for (const e of evts) {
+            const prev = by.get(e.t);
+            by.set(e.t, { ...prev, ...e, times: (prev?.times ?? 0) + 1 });
+          }
+          return [...by.values()];
+        };
+        return {
+          /** True while their hand is still on it. Checked by `answer` before it marks anything. */
+          busy() { pull(); return pending.length > 0 && performance.now()-lastAt < QUIET_MS; },
+          collect() {
+            pull();
+            if (!pending.length) return null;
+            if (performance.now()-lastAt < QUIET_MS)
+              return { still_working: true, note: "their hand is still on it — say nothing yet" };
+            const since_last_call = squash(pending);
+            pending = [];
+            return { since_last_call };
+          },
+        };
+      })();
+
+      /* Trace, time, and — because the platform gives the page no way to push — hand back
+         anything that happened on the workspace since her last call. Every result carries it, so
+         whichever tool she reaches for next is the one that delivers the news. */
+      /** How long after a clean registration to stop believing she is about to speak. */
+      const SILENCE_MS = 15000;
+      const TOOL_NAMES = Object.keys(VERBS);
+      const ToolStat = Object.fromEntries(TOOL_NAMES.map((n) => [n, { calls:0, last:null, ms:null }]));
+      const TOOLS = Object.fromEntries(Object.entries(VERBS).map(([name, def]) => [name, {
+        ...def,
+        execute: async (args, ctx) => {
+          const t = performance.now();
+          try {
+            let out = await def.execute(args ?? {}, ctx);
+            const news = Activity.collect();
+            if (news && out && typeof out === "object") out = { ...out, ...news };
+            const t1 = performance.now();
+            const st = ToolStat[name];
+            st.calls++; st.ms = Math.round(t1-t); st.last = JSON.stringify(out);
+            if ($("tools").classList.contains("on")) renderTools();
+            Trace.tool(name, args && Object.keys(args).length ? args : "", out, Math.round(t1-t));
+            return out;
+          } catch (e) { Trace.err(name, String(e?.message ?? e)); throw e; }
+        },
+      }]));
+
+      /* ══ RAIL PANES ══════════════════════════════════════════════════════════ */
+      let regInfo = { accepted: [], rejected: [], briefChars:null };
+      function renderTools() {
+        const acc = new Set(regInfo.accepted);
+        const rows = TOOL_NAMES.map((n) => {
+          const st = ToolStat[n], def = VERBS[n];
+          const on = acc.has(n), keys = Object.keys(def.parameters?.properties ?? {});
+          return `<div class="tool ${st.calls ? "hit" : ""} ${regInfo.accepted.length && !on ? "rej" : ""}">
+            <div class="h"><span class="n">${on ? "✓" : regInfo.accepted.length ? "✗" : "·"} ${n}</span>
+              <span class="c">${st.calls} call${st.calls === 1 ? "" : "s"}${st.ms != null ? ` · ${st.ms}ms` : ""}</span></div>
+            <div class="d">${def.description}</div>
+            <div class="p">params: ${keys.length ? keys.join(", ") : "none"}</div>
+            ${st.last ? `<div class="last">last → ${String(st.last).slice(0,150)}</div>` : ""}
+          </div>`; }).join("");
+        const rej = regInfo.rejected.length
+          ? `<div class="tool rej"><div class="h"><span class="n">rejected</span></div>
+             <div class="d">${JSON.stringify(regInfo.rejected)}</div></div>` : "";
+        $("tools").innerHTML = `<div class="banner">
+          <b>${TOOL_NAMES.length}</b> tools · <b>${Object.keys(MANIPULATIVES).length}</b> manipulatives ·
+          <b>${CURRICULUM.length}</b> curriculum levels<br>
+          The first number does not move when the other two do. That is the whole design.
+          </div><div class="thead">deadline <b>${TOOL_DEADLINE_MS}ms</b>${
+          regInfo.briefChars ? ` · brief <b>${regInfo.briefChars}</b>/4000` : ""}
+          ${regInfo.accepted.length ? "" : "<br><span style=\"color:#c98a3a\">not connected yet — local definition</span>"}
+          </div>${rows}${rej}`;
+      }
+      function renderRegistry() {
+        const impl = new Set(Object.keys(MANIPULATIVES));
+        const byStrand = {};
+        for (const l of CURRICULUM) (byStrand[l.strand] ??= []).push(l);
+        const levels = Object.entries(byStrand).map(([s, ls]) =>
+          `<div class="thead" style="margin-top:10px"><b>${STRAND_NAMES[s]}</b></div>` +
+          ls.sort((a,b) => a.difficulty-b.difficulty).map((l) => `<div class="reg">
+            <span class="n ${l.gen ? "" : "soon"}">${l.gen ? "✓" : "·"} ${l.id}</span>
+            <div class="m">ages <b>${l.ages[0]}-${l.ages[1]}</b> · difficulty <b>${l.difficulty}</b>
+              · manipulative <b>${l.manipulative}</b>${impl.has(l.manipulative) ? "" : " <span style=\"color:#c98a3a\">(not built)</span>"}
+              ${l.planned ? `· <span style="color:#c98a3a">${l.planned}</span>` : ""}</div></div>`).join("")).join("");
+        /* `takesInput` is true for nine out of nine now, so it has stopped telling anyone
+           anything. What varies is the gesture, and the plugin already states that once, in the
+           sentence the workspace prints under itself. */
+        const plugs = Object.values(MANIPULATIVES).map((m) => `<div class="reg">
+          <span class="n">✓ ${m.id}</span>
+          <div class="m">ages <b>${m.ages[0]}-${m.ages[1]}</b>
+            · methods <b>mount, demonstrate, read, events, unmount</b>
+            ${m.hint ? `<br>· <b>${m.hint.replace(/[<>&]/g, "")}</b>` : "· <b>no input</b>"}</div></div>`).join("");
+        $("registry").innerHTML = `<div class="banner">
+          Adding a manipulative costs <b>0</b> tool slots and <b>0</b> characters of her brief.
+          It is a key in one table and an id in the other.</div>
+          <div class="thead"><b>MANIPULATIVES</b> — the plug point</div>${plugs}
+          <div class="thead" style="margin-top:12px"><b>CURRICULUM</b> — data, not control flow</div>${levels}`;
+      }
+      document.querySelectorAll("#trace .tab").forEach((b) => b.onclick = () => {
+        document.querySelectorAll("#trace .tab").forEach((x) => x.classList.toggle("on", x === b));
+        document.querySelectorAll("#trace .pane").forEach((p) => p.classList.toggle("on", p.id === b.dataset.t));
+        if (b.dataset.t === "tools") renderTools();
+        if (b.dataset.t === "registry") renderRegistry();
+      });
+      renderTools(); renderRegistry();
+
+      /* ══ COURSE PICKER ═══════════════════════════════════════════════════════
+         Behind the level button, over the workspace, rather than laid out permanently above it.
+         Eleven levels on the page at all times pushed her face and the manipulative into the
+         bottom third of the window, and a chooser you touch once a session does not earn that. */
+      (() => {
+        const byStrand = {};
+        for (const l of CURRICULUM) (byStrand[l.strand] ??= []).push(l);
+        $("course").innerHTML = Object.entries(byStrand).map(([s, ls]) => `<div class="strand">
+          <h4>${STRAND_NAMES[s]}</h4><div class="lvls">${ls.sort((a,b)=>a.difficulty-b.difficulty).map((l) => `
+            <div class="lvl ${l.gen ? "" : "soon"}" data-id="${l.id}">
+              <div class="nm">${l.name}</div>
+              <div class="mt"><span>ages ${l.ages[0]}–${l.ages[1]}</span>
+                <span class="d"><i style="width:${l.difficulty*10}%"></i></span>
+                ${l.planned ? `<span class="tag">${l.planned}</span>` : ""}</div>
+            </div>`).join("")}</div></div>`).join("");
+
+        const open = (v) => { $("course").classList.toggle("on", v);
+          $("lvchip").classList.toggle("open", v); };
+        $("lvchip").onclick = () => { open(!$("course").classList.contains("on")); Sfx.play("tap"); };
+        document.addEventListener("pointerdown", (e) => {
+          if (!$("course").contains(e.target) && !$("lvchip").contains(e.target)) open(false); });
+        $("course").onclick = (e) => {
+          const el = e.target.closest(".lvl"); if (!el || el.classList.contains("soon")) return;
+          level = RUNNABLE.find((l) => l.id === el.dataset.id);
+          save.levelId = level.id; persist();
+          Sfx.play("tap"); Trace.fx("level picked", level.id);
+          open(false);
+          preview();
+        };
+      })();
+
+      /* ══ VOICE LAB ═══════════════════════════════════════════════════════════
+         A wrong voice id is accepted by the platform and then just sounds like someone else, so
+         the only instrument that settles it is an ear. This picks a preset NAME out of the
+         registry — never a spec, which would be a way to post arbitrary JSON into the mint. */
+      let voicePreset = null;
+      (async () => {
+        const presets = await (await fetch("/api/voices")).json();
+        Trace.http("GET /api/voices","",`${presets.length} presets`);
+        $("voicesel").innerHTML = `<option value="">voice: as assigned</option>` +
+          presets.map((p) => `<option value="${p.name}">${p.placeholder ? "⚠ " : ""}${p.name} · ${p.provider}${
+            p.verified ? "" : " · unverified"}</option>`).join("");
+        const ph = new Set(presets.filter((p) => p.placeholder).map((p) => p.name));
+        $("voicesel").onchange = (e) => {
+          voicePreset = e.target.value || null;
+          $("voicesel").classList.toggle("ph", ph.has(voicePreset));
+          setupSummary();
+          Trace.fx("voice preset", voicePreset ?? "as assigned");
+          if (ph.has(voicePreset))
+            $("says").textContent = "That preset still has a REPLACE_WITH_ placeholder — it cannot resolve.";
+        };
+        for (const p of presets.filter((p) => p.placeholder))
+          Trace.err("voice placeholder", `${p.name} — edit voices.json before trying it`);
+      })().catch((e) => Trace.err("voices", String(e)));
+
+      /* ══ MOTION AND THE ROOM ═════════════════════════════════════════════════
+         Both are two-state buttons that show the state they are in. Dark or light is the frame
+         only — the board stays white — and it is a real preference rather than a demo switch,
+         so it persists and it honours the system setting the first time round. */
+      let calm = false;
+      const setMotion = (v) => { calm = v; Juice.setCalm(v);
+        $("mo").textContent = v ? "reduced" : "motion"; };
+      $("mo").onclick = () => { setMotion(!calm); Sfx.play("tap"); Trace.fx("motion", calm ? "reduced" : "on"); };
+      setMotion(matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+      const setTheme = (t) => {
+        document.body.classList.toggle("lite", t === "lite");
+        $("th").textContent = t === "lite" ? "light room" : "dark room";
+        localStorage.setItem("ms_theme", t);
+      };
+      $("th").onclick = () => {
+        const next = document.body.classList.contains("lite") ? "dark" : "lite";
+        setTheme(next); Sfx.play("tap"); Trace.fx("room", next);
+      };
+      setTheme(localStorage.getItem("ms_theme")
+        ?? (matchMedia("(prefers-color-scheme: light)").matches ? "lite" : "dark"));
+
+      /* The one line the collapsed setup drawer shows. Everything inside it is set once a session,
+         so the summary has to say enough that you know whether you need to open it — and it turns
+         red when the microphone is the thing that is wrong, because that is the one setting whose
+         being wrong is not obvious until the call is already running. */
+      function setupSummary() {
+        $("setupsum").textContent = voicePreset ?? "voice as assigned";
+        $("setup").classList.toggle("warn", $("micmsg").classList.contains("bad"));
+      }
+      setupSummary();   // seed it on boot; after that only the voice and mic handlers touch it
+
+      /* ══ THE LEARNER'S OWN QUEUE ═════════════════════════════════════════════
+         The piggyback, one level up. Manipulatives already hand back what happened on them
+         through `events()`; this is the same channel for things the learner does that no
+         manipulative owns — typing being the only one so far. Both are drained into
+         `since_last_call` by the tool wrapper, so whichever verb she reaches for next is the one
+         that delivers the news, and she still cannot be told anything before she asks. */
+      const Learner = (() => {
+        const q = [];
+        return { push: (e) => q.push(e), drain: () => q.splice(0, q.length) };
+      })();
+
+      /* ══ KEYPAD ══════════════════════════════════════════════════════════════ */
+      let tapped = null;
+      $("pad").innerHTML = Array.from({length:21},(_,i) => `<button data-n="${i}">${i}</button>`).join("");
+      $("pad").onclick = (e) => { const b = e.target.closest("button"); if (!b) return;
+        Juice.pop(b,1.18,.84); Sfx.play("tap");
+        if (!task) { $("says").textContent = "No task yet — wait for the teacher."; return; }
+        tapped = Number(b.dataset.n);
+        Trace.work("learner tapped", tapped, "queued for her next tool call");
+        $("says").textContent = `Tapped ${tapped} — waiting for the teacher.`; };
+
+      /* ══ TYPING TO HER ═══════════════════════════════════════════════════════
+         One box, two jobs, because they are the same act: you type something and she finds out.
+         If it parses as a number it also becomes the answer, exactly as a tap would — the levels
+         that hide the keypad ignore it, because the answer to "thread both rings" is the number
+         two and a text box next to that question is a button marked win.
+
+         Whatever the text is, it goes into the piggyback queue as well, so she reads it on her
+         next tool call. That is not a message channel and the note under the box says so. */
+      let typed = null;
+      $("tell").onsubmit = (e) => {
+        e.preventDefault();
+        const text = $("tellin").value.trim();
+        if (!text) return;
+        $("tellin").value = "";
+        Sfx.play("tap");
+        // A bare number is an answer; "12 apples" is not, and neither is "−3" with a real minus.
+        const n = /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : null;
+        const answerable = n != null && level.input !== "workspace";
+        if (answerable) typed = n;
+        Learner.push({ t:"typed", text, ...(answerable ? { as_answer: n } : {}) });
+        $("tellnote").innerHTML = answerable
+          ? `<b>${n}</b> is waiting as their answer — she gets it on her next tool call.`
+          : `<b>“${text.slice(0, 40).replace(/[<>&]/g, "")}”</b> queued — she gets it on her next tool call.`;
+        Trace.work("learner typed", text,
+          answerable ? `answer ${n}, queued for her next tool call` : "queued for her next tool call");
+      };
+
+      /* ══ MICROPHONE ══════════════════════════════════════════════════════════
+         Continuity (iPhone as mic) is the trap: it enumerates, getUserMedia hands back a live
+         track, and it stays silent unless the phone is active. Prefer the built-in, and always
+         constrain with `exact` — without it the browser treats deviceId as a hint. */
+      /** One word on the panel, the detail in the drawer, and the drawer's summary goes red with
+       *  it. Everything that knows something about the microphone routes through here. */
+      function micState(word, bad = false) {
+        $("micstate").textContent = word;
+        $("micbar").classList.toggle("bad", bad);
+        $("micmsg").classList.toggle("bad", bad);
+        setupSummary();
+      }
+      const isContinuity = (l = "") => /iphone|ipad|continuity/i.test(l);
+      const isBuiltIn = (l = "") => /macbook|built-?in/i.test(l);
+      let meterStop = null, testTrack = null;
+      function runMeter(lkTrack, tag) {
+        meterStop?.();
+        const { calculateVolume, cleanup } = createAudioAnalyser(lkTrack, { smoothingTimeConstant:.2 });
+        const ms = lkTrack.mediaStreamTrack;
+        let peak = 0, heard = false, raf = 0, maxV = 0, warned = false;
+        const st = performance.now();
+        (function tick() {
+          const v = calculateVolume(); maxV = Math.max(maxV, v);
+          if (v > .004 && !heard) { heard = true; micState("live");
+            Trace.mic("signal", tag, `peak ${(maxV*1000).toFixed(0)}`); }
+          peak = Math.max(Math.min(1, v*6), peak*.9);
+          $("miclv").style.width = (peak*100).toFixed(0)+"%";
+          if (heard) { if ($("micmsg").classList.contains("bad")) { $("micmsg").classList.remove("bad"); setupSummary(); }
+            $("micmsg").textContent = `live · ${(maxV*1000).toFixed(0)}`; }
+          else if (!warned && performance.now()-st > 3000) {
+            warned = true; micState("silent", true);
+            $("micmsg").textContent = isContinuity(ms?.label)
+              ? `"${ms.label.slice(0,22)}" is an iPhone Continuity mic — silent unless the phone is active.`
+              : `Live but silent (muted:${ms?.muted} ${ms?.readyState}). Check Privacy → Microphone.`;
+            Trace.err("mic silent", `${ms?.label} muted:${ms?.muted}`);
+          }
+          raf = requestAnimationFrame(tick);
+        })();
+        meterStop = () => { cancelAnimationFrame(raf); cleanup?.().catch(()=>{}); };
+      }
+      async function listMics(activeId) {
+        const ds = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+        $("micdev").innerHTML = ds.map((d,i) =>
+          `<option value="${d.deviceId}">${(d.label || `input ${i+1}`).slice(0,24)}</option>`).join("");
+        if (activeId) $("micdev").value = activeId;
+        return ds;
+      }
+      async function testMic(deviceId) {
+        micState("testing…"); $("micmsg").textContent = "…";
+        try {
+          await testTrack?.stop();
+          testTrack = await createLocalAudioTrack(deviceId ? { deviceId:{ exact: deviceId } } : {});
+          await listMics(testTrack.mediaStreamTrack.getSettings().deviceId);
+          $("micmsg").textContent = "listening…";
+          runMeter(testTrack, "self-test");
+        } catch (e) {
+          micState(e.name === "NotAllowedError" ? "denied" : "failed", true);
+          $("micmsg").textContent = e.name === "NotAllowedError" ? "Microphone permission denied" : String(e.message ?? e);
+          Trace.err("mic test", e.name ?? String(e));
+        }
+      }
+      $("mictest").onclick = () => testMic($("micdev").value || null);
+      $("micdev").onchange = () => testMic($("micdev").value);
+      (async () => {
+        const ds = await listMics();
+        if (!ds.length || !ds[0].label) return;
+        const best = ds.find((d) => isBuiltIn(d.label))
+                  ?? ds.find((d) => !isContinuity(d.label) && !/^default/i.test(d.label)) ?? ds[0];
+        $("micdev").value = best.deviceId;
+      })().catch(() => {});
+
+      /* ══ TEACHERS ════════════════════════════════════════════════════════════
+         Three circles under her own panel, and picking one swaps the face above them. Her name
+         and blurb move into the caption block, because that is the one place on the page where
+         a sentence in her voice belongs. */
+      /* Her face before there is a video track, drawn rather than fetched. The platform's avatar
+         record carries no portrait — {id, displayName, sourceKind, status, defaultVoiceId} — so
+         any image here would be a file shipped alongside, and a file shipped alongside is a file
+         that only matches the author's cast. A monogram matches whoever is actually configured. */
+      const portrait = ({ name, hue }) => {
+        const initials = name.replace(/[^A-Za-z ]/g, "").split(/\s+/).filter(Boolean)
+          .slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">`
+          + `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">`
+          + `<stop offset="0" stop-color="hsl(${hue} 58% 64%)"/>`
+          + `<stop offset="1" stop-color="hsl(${(hue+22)%360} 52% 38%)"/></linearGradient></defs>`
+          + `<rect width="200" height="200" fill="url(#g)"/>`
+          + `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" `
+          + `font-family="ui-rounded,system-ui,sans-serif" font-size="78" font-weight="700" `
+          + `fill="rgba(255,255,255,.94)">${initials}</text></svg>`;
+        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      };
+
+      let chosen = null;
+      (async () => {
+        const roster = await (await fetch("/api/teachers")).json();
+        Trace.http("GET /api/teachers","",`${roster.length} teachers`);
+        $("pick").innerHTML = roster.map((t) => `
+          <button class="who" data-slug="${t.slug}" data-name="${t.name}" data-blurb="${t.blurb}"
+                  title="${t.name} — ${t.blurb}"><img src="${portrait(t)}" alt="${t.name}" /></button>`).join("");
+        $("pick").onclick = (e) => { const el = e.target.closest(".who"); if (!el) return;
+          chosen = el.dataset.slug; $("still").src = el.querySelector("img").src;
+          $("whoname").textContent = `${el.dataset.name} · ${el.dataset.blurb}`;
+          Sfx.play("tap"); Juice.pop(el,1.06,.94); Trace.fx("teacher", chosen);
+          $("pick").querySelectorAll(".who").forEach((x) => x.classList.toggle("on", x === el)); };
+        $("pick").querySelector(".who")?.click();
+      })().catch((e) => Trace.err("teachers", String(e)));
+
+      /* ══ CALL ════════════════════════════════════════════════════════════════ */
+      let room = null, sessionId = null, herSpoke = false, silenceTimer = 0, herPeak = 0;
+      /** Her caption doubles as the connection status, so it has to stop being the status the
+       *  moment she says anything — and it has to keep moving until then. It used to be written
+       *  once, to "Connecting…", and then only ever again by a transcription: a call that
+       *  connected but stayed quiet looked identical to a call that never connected at all. */
+      const status = (s) => { if (!herSpoke) $("says").textContent = s; };
+      async function mint() {
+        for (let i = 0; i < 12; i++) {
+          const t = performance.now();
+          const body = { teacher: chosen,
+            ...(voicePreset ? { voicePreset } : {}),
+            lastStrand: level.strand, lastDifficulty: level.difficulty, lastAccuracy: save.acc };
+          const r = await fetch("/api/call", { method:"POST", headers:{"content-type":"application/json"},
+            body: JSON.stringify(body) });
+          const ms = Math.round(performance.now()-t);
+          if (r.status === 429) { const q = await r.json();
+            Trace.http("POST /api/call", body, `429 queued #${q.position}`, ms);
+            $("says").textContent = `${q.position ?? "?"} ahead of you, hold on…`;
+            await new Promise((s) => setTimeout(s, q.retryAfterMs ?? 2000)); continue; }
+          if (!r.ok) { const e = await r.json().catch(() => ({}));
+            Trace.err("POST /api/call", `${r.status} ${e.error ?? ""}`);
+            throw new Error(r.status === 402 ? "Out of credits" : (e.error ?? `mint failed ${r.status}`)); }
+          const g = await r.json();
+          Trace.http("POST /api/call", body,
+            `voice ${g.voice} · brief ${g.briefChars}/4000 · ${String(g.grant.session_id).slice(0,8)}…`, ms);
+          return g;
+        }
+        throw new Error("still queued after 12 tries");
+      }
+
+      $("call").onclick = async () => {
+        $("err").textContent = ""; $("call").disabled = true;
+        herSpoke = false; herPeak = 0; clearTimeout(silenceTimer);
+        status("Connecting…");
+        try {
+          const b = await (await fetch("/api/budget")).json();
+          Trace.http("GET /api/budget","",`${b.secondsLeft}s left`);
+          if (!b.enough) throw new Error(`Only ${b.secondsLeft}s of credit left.`);
+
+          const g = await mint();
+          sessionId = g.grant.session_id;
+          status("Granted. Joining the room…");
+          /* `mode` is always "avatar", so a video track is always coming — but it does not
+             arrive with the grant. The still stands in until it does, and the ring is the
+             speaking cue for exactly that window: an empty frame with audio on it reads as a
+             call that failed. */
+          let videoUp = false;
+          $("her").style.display = "none";
+          $("still").style.display = "block";
+
+          room = new Room();
+          room.on(RoomEvent.TrackSubscribed, (t, pub, p) => {
+            Trace.room("TrackSubscribed", `${t.kind} from ${p?.identity ?? "?"}`);
+            if (t.kind === "video") {
+              t.attach($("her"));
+              videoUp = true;
+              $("her").style.display = "block";
+              $("still").style.display = "none";
+              status("She is on screen."); return;
+            }
+            t.attach();
+            status("She is on air — she speaks first, so give her a moment.");
+            const { calculateVolume: herVol } = createAudioAnalyser(t, { smoothingTimeConstant:.3 });
+            (function h() { const v = herVol();
+              herPeak = Math.max(herPeak, v);
+              $("ring").classList.toggle("on", v > .02 && !videoUp);
+              requestAnimationFrame(h); })();
+          });
+          room.on(RoomEvent.TranscriptionReceived, (segs) => {
+            const last = segs[segs.length-1];
+            if (!last?.text) return;
+            herSpoke = true; clearTimeout(silenceTimer);
+            $("says").textContent = last.text;
+            if (last.final === false) return;
+            Trace.say(last.text);
+            // Tool names have no business in her speech and the page never sees her text stream,
+            // so this cannot be filtered — only detected and blamed.
+            const leaked = TOOL_NAMES.filter((n) => last.text.includes(n));
+            if (leaked.length) Trace.err("tool name spoken aloud", leaked.join(", "));
+            /* The other half of the same failure, and the one that actually happened: she read a
+               stage direction out. The brief's worked example used to be written as
+               `(silently call next_task, then show) "Right - what is five plus two?"`, and she
+               said the bracket as well as the line. The example is gone; this catches a relapse. */
+            const aside = last.text.match(/\([^)]{0,80}?\b(call|calling|show|showing|silently|tool)\b[^)]{0,80}?\)/i);
+            if (aside) Trace.err("stage direction spoken aloud", aside[0]);
+          });
+          room.on(RoomEvent.Disconnected, (r) => { Trace.room("Disconnected", r ?? "");
+            clearTimeout(silenceTimer); herSpoke = false;
+            $("says").textContent = "Session over."; $("call").disabled = false;
+            $("leave").disabled = true; room = null; refreshSpend(); });
+
+          const tc = performance.now();
+          await room.connect(g.grant.livekit_url, g.grant.participant_token);
+          Trace.room("connected", g.grant.room_name, "", Math.round(performance.now()-tc));
+          status("In the room. Waiting for her worker…");
+
+          /* A refused microphone is no longer fatal. It used to throw, which killed a call that
+             had already connected and published her video — and back then that was honest, because
+             without a microphone there was no way to answer. There is a box under the board now,
+             so a missing microphone costs one input out of four and the lesson goes ahead. */
+          try { await room.localParticipant.setMicrophoneEnabled(true); }
+          catch (e) {
+            const why = e?.name === "NotAllowedError"
+              ? "Microphone permission denied — type your answers in the box instead."
+              : String(e?.message ?? e);
+            micState(e?.name === "NotAllowedError" ? "denied" : "failed", true);
+            $("micmsg").textContent = why;
+            $("err").textContent = why;
+            Trace.err("setMicrophoneEnabled", String(e?.name ?? e?.message ?? e));
+          }
+          const micTrack = room.localParticipant.getTrackPublication("microphone")?.track;
+          if (micTrack) runMeter(micTrack, "in-call");
+          else { micState("no track", true); $("micmsg").textContent = "No microphone track"; }
+
+          const tr = performance.now();
+          const reg = await attachAvatarTools(room, TOOLS, { timeoutMs:15000 });
+          Trace.room("tools registered", `${reg.accepted.length} accepted`,
+            reg.rejected.length ? `rejected ${JSON.stringify(reg.rejected)}` : `deadline ${TOOL_DEADLINE_MS}ms`,
+            Math.round(performance.now()-tr));
+          regInfo = { accepted: reg.accepted, rejected: reg.rejected,
+                      briefChars: g.briefChars };
+          renderTools();
+          $("leave").disabled = false;
+          status("Ready. She opens — she should greet you and set the first task.");
+          /* Everything above can succeed and she can still never say a word: the grant is fine,
+             the room is fine, the tools are registered, and her worker simply does not open. That
+             failure used to look exactly like a failure to connect, so it gets its own message and
+             its own ERR row rather than leaving "Connecting…" on screen forever. */
+          silenceTimer = setTimeout(() => {
+            if (herSpoke) return;
+            /* Her audio track tells the two silences apart, and they are completely different
+               bugs: a worker that never opened its mouth, versus a worker that is talking while
+               `TranscriptionReceived` never fires. The caption is the only place either one shows,
+               so it has to say which. */
+            const audible = herPeak > .01;
+            status(audible
+              ? "She is speaking — but no transcript is arriving, so her words cannot be shown."
+              : "Connected, tools registered — but she has not made a sound. Check the rail: "
+                + "ROOM rows show the join, SAY rows would be her transcript.");
+            Trace.err(audible ? "speech but no transcript" : "no speech",
+              `${Math.round(SILENCE_MS/1000)}s after tools registered · her audio peak `
+              + `${(herPeak*1000).toFixed(0)} · grant, room and registration all succeeded`);
+          }, SILENCE_MS);
+        } catch (e) {
+          /* Tear the room down on the way out. Anything that threw after `room.connect` used to
+             leave the room joined and the session billing, with the End button still disabled —
+             and a disabled button does nothing when you click it, so there was no way to hang up
+             from the page at all. The beacon covers the session the server minted for us. */
+          const why = String(e.message ?? e);
+          Trace.err("start", why);
+          try { await room?.disconnect(); } catch {}
+          if (sessionId) { navigator.sendBeacon("/api/end", JSON.stringify({ session_id: sessionId }));
+            sessionId = null; }
+          room = null;
+          clearTimeout(silenceTimer); herSpoke = false;
+          $("err").textContent = why;
+          $("call").disabled = false; $("leave").disabled = true;
+          $("says").textContent = "Could not connect.";
+        }
+      };
+      $("leave").onclick = () => { Trace.fx("leave clicked"); room?.disconnect(); };
+      addEventListener("pagehide", () => {
+        if (sessionId) navigator.sendBeacon("/api/end", JSON.stringify({ session_id: sessionId })); });
+
+      async function refreshSpend() {
+        try { const s = await (await fetch("/api/spend")).json(); if (s.error) return;
+          $("spend").textContent = `${s.calls} calls · ${s.seconds}s on air · ${s.credits} credits`;
+        } catch {}
+      }
+      refreshSpend();
+      hud();
+      preview();   // never open on an empty workspace — show the restored level straight away
+
+      /* Exposed on purpose: this demo is about the registry, and driving the six verbs from the
+         console — `__ms.TOOLS.next_task.execute({})` — exercises every manipulative without
+         placing a billed call. `__ms.MANIPULATIVES` is where you hot-plug a new one. */
+      window.__ms = { Trace, TOOLS, MANIPULATIVES, CURRICULUM,
+                      // the live Room, because "she connected but said nothing" is only
+                      // diagnosable from the console with the participants in front of you
+                      get room() { return room; },
+                      get level() { return level; }, set level(l) { level = l; hud(); },
+                      get task() { return task; }, get active() { return active; } };
+      Trace.fx("ready", `${TOOL_NAMES.length} tools · ${Object.keys(MANIPULATIVES).length} manipulatives · ${CURRICULUM.length} levels`);
+    </script>
+  </body>
+</html>

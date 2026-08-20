@@ -49,7 +49,12 @@ const SKIP_FILE = new Set(["package-lock.json"]);
  * fail the build on files that never ship. Must stay in step with that script's STRIP list —
  * which is why the script re-scans its own output afterwards rather than trusting this set.
  */
-for (const f of ["BOUNDARY.md", "PROVENANCE.md", "scripts/make-publish-tree.sh"]) SKIP_FILE.add(f);
+for (const f of [
+  "BOUNDARY.md",
+  "PROVENANCE.md",
+  "scripts/make-publish-tree.sh",
+  "scripts/sync-public.sh",
+]) SKIP_FILE.add(f);
 
 // The terms file contains every forbidden term by definition — scanning it would flag it.
 if (termsFile) SKIP_FILE.add(relative(process.cwd(), resolve(termsFile)));

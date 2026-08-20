@@ -48,6 +48,10 @@ Demos — larger showcases:
   tool deadline
 - [apps/demo/livestream](./apps/demo/livestream): comments, gifts and hearts all ride one
   `lk.chat` topic — she performs to a crowd she cannot see
+- [apps/demo/math-studio](./apps/demo/math-studio): the tool plane held at a fixed six verbs
+  however far the app grows. A tool per thing on screen dies on arithmetic — `MAX_TOOLS` is 32
+  and `instructions` caps at 4,000 chars — so the manipulatives register with a curriculum in
+  the page and what she is looking at reaches her through the tool RESULT, not the tool name
 There is no archive folder: a superseded example is deleted, not parked, so everything under
 apps/ is current and safe to copy from.
 

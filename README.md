@@ -141,6 +141,7 @@ Every example runs standalone — copy one out of the repo and it still works.
 | --- | --- |
 | [**coding-companion**](./apps/demo/coding-companion) | Two models in one call: your character is the conversation, a cheaper model is the editor, and they drive it through the tool plane |
 | [**livestream**](./apps/demo/livestream) | An audience is not a new primitive — comments, gifts and hearts all ride one chat topic |
+| [**math-studio**](./apps/demo/math-studio) | A tool plane that stays six tools wide however far the app grows — the things on screen register with the page, not with the character |
 
 ---
 
