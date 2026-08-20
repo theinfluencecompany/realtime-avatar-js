@@ -97,6 +97,14 @@ await rta.createAvatarFromVideo({ displayName: "Rin", videoUrl: "https://…/idl
 If you are checking this yourself: read a frame onto a canvas and look at the mean. Track
 size proves nothing.
 
+**Frame the source tight on the face.** A video-sourced avatar shot as a medium — a presenter
+standing in a dressed set, face a sixth of the frame — preprocesses, reports `ready`, and mints
+calls; then **the render worker never joins the room**. There is no error and no failed status,
+just a call that connects to nobody, so the tools never register and the page can only report a
+timeout. The same footage re-cropped to head-and-shoulders works first time. Aspect ratio is not
+the variable — 1:1 and 9:16 both work — and the renderer crops to the face regardless, so frame
+for a close-up rather than for a set.
+
 ### 4. Every call is full duplex; `mode` only picks the renderer
 
 She listens the whole time she speaks, so a user can cut her off mid-sentence. That is true
@@ -285,7 +293,7 @@ addEventListener("pagehide", () => {
 `endCall` is best-effort and idempotent: `true` when acknowledged, `false` for anything
 else, never a throw. A beacon and a disconnect handler may both fire for the same call
 without error, and a release that is lost is a slower release — the join timeout is the
-backstop. Both apps in `apps/demo/` carry the full pattern end to end.
+backstop. Every app in `apps/demo/` carries the full pattern end to end.
 
 ---
 

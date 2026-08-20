@@ -1,21 +1,22 @@
 /**
  * The coding companion.
  *
- * You describe what you want out loud. SHE decides it is a build: her model calls a tool that
- * lives in the page, real code streams into the panel beside her and runs in the browser, and
- * when it throws the build hands the error back to the code model and patches it.
+ * You describe an app out loud. SHE decides it is a build: her model calls a tool that lives
+ * in the page, a complete HTML document streams into the panel beside her and renders in a
+ * sandboxed iframe, and when you like it she publishes it to a public URL.
  *
- * Two models, on purpose. Holding a conversation and writing code are different jobs, and
+ * Two models, on purpose. Holding a conversation and writing an app are different jobs, and
  * paying conversation prices for both is how a demo becomes a bill — so the avatar is the
- * voice and a cheaper coding model is the editor. The avatar platform never sees the coding
- * model, its key, or the code.
+ * voice and a cheaper coding model is the builder. The avatar platform never sees the coding
+ * model, its key, or the document.
  *
  * The rule that survives being copied: she is told never to read code aloud. A character who
- * dictates a function signature is unlistenable, and she will do it unless told not to.
+ * dictates a div is unlistenable, and she will do it unless told not to.
  */
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
 
 const PORT = Number(process.env.PORT ?? 4192);
@@ -28,59 +29,71 @@ if (!apiKey) {
 }
 const codeKey = process.env.OPENAI_API_KEY;
 if (!codeKey) {
-  console.error("Missing OPENAI_API_KEY — the code panel is the app. See .env.example.");
+  console.error("Missing OPENAI_API_KEY — the build panel is the app. See .env.example.");
   process.exit(1);
 }
 const rta = new RealtimeAvatar({ apiKey, userAgent: "coding-companion" });
 
-/** The coding brain. Any OpenAI-compatible endpoint; deliberately not the conversation model. */
+/** The building brain. Any OpenAI-compatible endpoint; deliberately not the conversation model. */
 const CODE_BASE_URL = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
 const CODE_MODEL = process.env.CODE_MODEL ?? "gpt-4.1";
+
+/**
+ * Publishing is OPTIONAL and off unless both variables are set.
+ *
+ * Without them the app is a local studio: build, preview, restore, no share link. The page
+ * asks `/api/config` what it may offer and leaves the publish tools unregistered, so she is
+ * never briefed on a verb she cannot call — a tool that exists and always fails is worse
+ * than one that was never there.
+ */
+const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+const cfAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
+const canPublish = Boolean(cfToken && cfAccount);
+if (!canPublish) console.log("no CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID — publishing is off");
+
+/** A Worker script is capped at 1 MB compressed on the free plan. Refuse early and in words. */
+const MAX_HTML = 700_000;
+/** Fixed, and in the past. A compatibility_date the account has not reached yet is rejected. */
+const COMPAT_DATE = "2025-08-01";
 
 /**
  * Her brief.
  *
  * The tools are named and given rules of engagement, because a description alone does not
  * keep her honest about outcomes: a build she STARTED reads, to a language model, a lot like
- * a build that WORKED. The "never announce a result check_program has not given you" line is
- * the one doing the work.
+ * a build that WORKED. The "never announce a result check_app has not given you" line is the
+ * one doing the work, and it now covers publishing too — which takes even longer than a build.
  */
-const COMPANION = `You are a warm, sharp senior engineer pair-programming out loud with someone talking to you by voice. You are the VOICE, not the editor. Code is written by tools in the page, on your say-so.
+const companionBrief = () => `You are a warm, sharp senior engineer building a web app out loud with someone talking to you by voice. You are the VOICE, not the builder. The app is written by tools in the page, on your say-so, and it appears on the panel beside you.
 
-Your two tools:
-- write_program — call it whenever they ask you to write, change, fix or extend code, passing their request in their own words. It returns a receipt immediately; the real build takes seconds to tens of seconds, streams the code onto the panel beside you, and retries itself when the program throws.
-- check_program — call it when they ask whether it worked, what it printed, or what happened. A build you started is not a build that worked: never announce a result check_program has not given you.
+Your tools:
+- build_app — call it whenever they ask you to make, change, fix or extend the app, passing their request in their own words. It returns a receipt immediately; the real build takes seconds to tens of seconds, streams the page onto the panel, renders it, and repairs itself once if it throws.
+- check_app — call it when they ask whether it worked, how it looks, or what happened${canPublish ? ", and to find out whether a publish has finished" : ""}. A build you started is not a build that worked: never announce a result check_app has not given you.
+- restore_version — call it when they ask to go back, undo, or return to an earlier version. Versions are numbered from 1 and check_app tells you which exist.${
+  canPublish
+    ? "\n- publish_app — call it when they ask to publish, deploy, ship or share. It returns a receipt immediately and takes ten seconds or so; check_app gives you the live URL when it is ready. Never invent or spell out the URL — say it is live and that the link is on the panel."
+    : ""
+}
 
-After starting a build, say so in one short sentence and move on. If check_program says writing, running or retrying, say it is still going. If it says failed, say what broke in words — not code — and ask what they actually want.
+After starting a build, say so in one short sentence and move on. If check_app says writing, rendering or repairing, say it is still going. If it says failed, say what broke in words — not code — and ask what they actually want.
 
-RULES: Never read code aloud. Never spell out syntax, symbols, markdown or a function signature. The code appears on a panel beside you — point at it ("it's on the panel", "try running it"). At most two spoken sentences per turn. Be specific: name the approach, flag the one tradeoff worth knowing. If they go quiet, ask what they are building.`;
+RULES: Never read code aloud. Never spell out syntax, symbols, tags, markdown, a class name or a URL. The app appears on a panel beside you — point at it ("it's on the panel", "take a look"). At most two spoken sentences per turn. Be specific: name what you changed, flag the one tradeoff worth knowing. If they go quiet, ask what they are building.`;
 
 /**
  * The code model's system prompt. It writes for the SANDBOX, not for a human reader — the
- * panel's contents are handed straight to a Web Worker, so anything that is not runnable
- * JavaScript lands in the editor and breaks the run.
+ * panel's contents are handed straight to an iframe with an opaque origin, so anything that
+ * is not a runnable single-file document lands in the preview and breaks the render.
  */
-const CODE_SYSTEM = `You are the code engine behind a voice coding companion. You output a COMPLETE, self-contained JavaScript program and nothing else.
-HARD RULES:
-- Output RAW JavaScript only. No markdown, no code fences, no prose. Comments inside the code are fine.
-- It runs in a sandboxed Web Worker: no DOM, no network, no imports, no require, no file system. Vanilla ES2020 only.
-- Show results with console.log. If they asked for a function, also call it on an example so running the file demonstrates it.
-- When you are given the previous program and its run output, return the ENTIRE corrected program, not a diff.
-- Keep it focused. Prefer clarity over cleverness.`;
+const CODE_SYSTEM = `You are the build engine behind a voice-driven web app studio. You output ONE COMPLETE, self-contained HTML document and nothing else.
 
-/**
- * The browser owns the conversation; this server owns the system prompt.
- *
- * Only `user` and `assistant` turns survive. A `system` turn in a request body is an
- * instruction-injection vector — it would sit alongside CODE_SYSTEM and quietly outrank it.
- */
-function sanitize(input) {
-  if (!Array.isArray(input)) return [];
-  return input
-    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-    .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }))
-    .slice(-20);
-}
+HARD RULES:
+- Output RAW HTML only, starting with <!doctype html>. No markdown, no code fences, no prose, no explanation before or after.
+- ONE file. Inline every style in <style> and every script in <script>. No local imports, no bundler, no build step.
+- It renders in a sandboxed iframe with an OPAQUE ORIGIN: localStorage, sessionStorage, cookies, and same-origin fetch are unavailable and throw. Keep all state in memory, in JavaScript variables. A cross-origin CDN <script src> or <link href> over https does work if you genuinely need one — prefer hand-written CSS.
+- alert, confirm and prompt are blocked by the sandbox. Render messages into the page instead.
+- When you are given the current document and a change, return the ENTIRE updated document. Never a diff, never a fragment, never "unchanged" placeholders.
+- Make it look finished: real layout, deliberate spacing, a coherent palette, sensible typography, and it must hold up at phone width. Populate it with plausible sample content — never an empty shell.
+- Keep it focused. Prefer clarity over cleverness.`;
 
 /**
  * The character to call.
@@ -116,21 +129,115 @@ async function avatarId() {
 const TOOLS_MODULE = createRequire(import.meta.url).resolve("@theinfluencecompany/realtime-avatar-tools");
 
 /**
- * Calls THIS process started, so `/api/end` can only end its own. The route hears from any
- * visitor, and `endCall` ends whatever id it is given — relaying an arbitrary id from the
- * body would let one page hang up another's call. Swept lazily at mint time: once a call
- * cannot still be live (its cap plus slack has passed), the entry has nothing left to protect.
+ * Calls THIS process started, so `/api/end` can only end its own — and, now, so `/api/publish`
+ * can only write to a Worker THIS process named. The route hears from any visitor. Taking a
+ * script name from the request body would let one page overwrite any Worker on the account,
+ * which on a real account is not a demo bug, it is a production outage. So the name is minted
+ * here, keyed to a session id we already know we issued, and never read from the wire.
+ *
+ * Swept lazily at mint time: once a call cannot still be live (its cap plus slack has passed),
+ * the entry has nothing left to protect.
  */
-const started = new Map(); // session_id → { pool, staleAtMs }
+const started = new Map(); // session_id → { pool, staleAtMs, site, url }
 const STARTED_SLACK_MS = 15 * 60_000;
+
+// ── Cloudflare ───────────────────────────────────────────────────────────────────────────
+/** One call against the account. Throws with the API's own first message, which is specific. */
+async function cf(path, init = {}) {
+  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cfAccount}${path}`, {
+    ...init,
+    headers: { authorization: `Bearer ${cfToken}`, ...(init.headers ?? {}) },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!body?.success) {
+    const first = body?.errors?.[0];
+    throw new Error(first ? `cloudflare ${first.code}: ${first.message}` : `cloudflare ${res.status}`);
+  }
+  return body.result;
+}
+
+/** `<script>.<subdomain>.workers.dev`. Constant per account, so it is fetched once. */
+let workersSubdomain = null;
+async function subdomain() {
+  if (!workersSubdomain) workersSubdomain = (await cf("/workers/subdomain")).subdomain;
+  return workersSubdomain;
+}
+
+/**
+ * Upload the document as a Worker that serves it, and switch its workers.dev route on.
+ *
+ * The same script name is reused for the life of a session, so pressing publish five times
+ * updates one site at one URL instead of leaving five orphans on the account — a demo that
+ * mints a script per build is a demo that quietly fills someone's dashboard.
+ */
+async function publish(site, html) {
+  const worker =
+    `const HTML = ${jsString(html)};\n` +
+    `export default { fetch: () => new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8" } }) };\n`;
+
+  const form = new FormData();
+  form.set(
+    "metadata",
+    new Blob([JSON.stringify({ main_module: "index.mjs", compatibility_date: COMPAT_DATE })], {
+      type: "application/json",
+    }),
+  );
+  form.set("index.mjs", new Blob([worker], { type: "application/javascript+module" }), "index.mjs");
+
+  await cf(`/workers/scripts/${site}`, { method: "PUT", body: form });
+  await cf(`/workers/scripts/${site}/subdomain`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ enabled: true, previews_enabled: false }),
+  });
+
+  // The upload and the route both return success BEFORE the URL answers — measured at about
+  // six seconds of 404 on a first publish, and none at all on a later one. Handing that URL
+  // straight to her means she says it is live while it is still a 404, so the address is not
+  // returned until it serves. The User-Agent is set because Cloudflare's own bot protection
+  // sits in front of workers.dev and answers 403 to some default agents — a poll that reads
+  // that as "not ready" would give up on a site that is already live.
+  const url = `https://${site}.${await subdomain()}.workers.dev`;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const ok = await fetch(url, { redirect: "manual", headers: { "user-agent": "coding-companion" } })
+      .then((r) => r.status < 400)
+      .catch(() => false);
+    if (ok) return url;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error("published, but the URL did not start serving within 30 seconds");
+}
+
+/**
+ * The document, as a JavaScript string literal.
+ *
+ * JSON.stringify covers quotes, backslashes and newlines. U+2028 and U+2029 it leaves raw,
+ * and those are line terminators to a JS parser — a page containing one would upload happily
+ * and then fail to parse on the edge.
+ */
+function jsString(text) {
+  return JSON.stringify(text).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+
+/** Never derived from anything the user said. A name is an address on someone's account. */
+const mintSiteName = () => `rta-studio-${randomBytes(4).toString("hex")}`;
 
 const server = createServer(async (req, res) => {
   try {
+    /**
+     * What this deployment can do. A SEPARATE route on purpose: the mint response is the
+     * grant relayed byte-for-byte, and folding a field of ours into it is exactly the reshape
+     * the browser SDK rejects.
+     */
+    if (req.method === "GET" && req.url === "/api/config") {
+      return void json(res, 200, { publish: canPublish });
+    }
+
     if (req.method === "POST" && req.url === "/api/call") {
       const call = await rta.startCall({
         avatarId: await avatarId(),
         mode: "avatar", // the renderer, not the turn-taking: every call is full duplex.
-        instructions: COMPANION,
+        instructions: companionBrief(),
         // THE GRANT. Without it her worker never exposes `rta.tools.register`, registration
         // in the browser fails, and not one tool is reachable from the model.
         clientTools: true,
@@ -144,11 +251,13 @@ const server = createServer(async (req, res) => {
           retryAfterMs: call.retryAfterMs,
         });
       }
-      // Remember what we minted — and where it is held — so /api/end can free exactly this.
+      // Remember what we minted — where it is held, and the one script name it may write to.
       for (const [id, s] of started) if (s.staleAtMs <= Date.now()) started.delete(id);
       started.set(call.sessionId, {
         pool: typeof call.raw.capacity_pool === "string" ? call.raw.capacity_pool : undefined,
         staleAtMs: Date.now() + MAX_SECONDS * 1000 + STARTED_SLACK_MS,
+        site: mintSiteName(),
+        url: null,
       });
       // The grant relayed byte-for-byte. Nothing rides inside it.
       return void json(res, 200, call.raw);
@@ -171,30 +280,39 @@ const server = createServer(async (req, res) => {
     }
 
     /**
-     * Stream code to the panel.
+     * Stream the document to the panel.
      *
-     * `runOutput`, when present, is what the sandbox printed last time — folded in as one more
-     * turn so the fix is made against reality instead of against a guess. That feedback leg is
-     * the whole difference between a code generator and a companion.
+     * The browser sends STRINGS, never turns. An earlier shape took a `messages` array and
+     * filtered `system` out of it; this one cannot be asked to, because there is no role in
+     * the request at all. The current document is the whole history worth keeping — the
+     * artifact is the state — so a growing transcript of 20 KB documents never has to exist.
      */
     if (req.method === "POST" && req.url === "/api/code") {
       const body = await readJson(req);
-      const messages = sanitize(body.messages);
-      if (!messages.length) return void json(res, 400, { error: "say what to build" });
+      const request = String(body.request ?? "").slice(0, 8000).trim();
+      const current = String(body.current ?? "").slice(0, MAX_HTML);
+      const errors = String(body.errors ?? "").slice(0, 4000).trim();
+      if (!request) return void json(res, 400, { error: "say what to build" });
 
-      const turns = [{ role: "system", content: CODE_SYSTEM }, ...messages];
-      const runOutput = typeof body.runOutput === "string" ? body.runOutput.slice(0, 4000) : "";
-      if (runOutput) {
-        turns.push({
-          role: "user",
-          content: `Running the previous program printed:\n\n${runOutput}\n\nFix it and return the entire corrected program.`,
-        });
+      let ask = current
+        ? `Here is the current document:\n\n${current}\n\nApply this change: ${request}`
+        : request;
+      if (errors) {
+        ask += `\n\nRendering the current document produced these errors:\n\n${errors}\n\nFix them and return the entire corrected document.`;
       }
 
       const upstream = await fetch(`${CODE_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: { authorization: `Bearer ${codeKey}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: CODE_MODEL, messages: turns, temperature: 0.2, stream: true }),
+        body: JSON.stringify({
+          model: CODE_MODEL,
+          messages: [
+            { role: "system", content: CODE_SYSTEM },
+            { role: "user", content: ask },
+          ],
+          temperature: 0.3,
+          stream: true,
+        }),
       });
       if (!upstream.ok || !upstream.body) {
         // Log a bounded slice; never surface an upstream body to the browser — it echoes the
@@ -205,6 +323,35 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store" });
       for await (const chunk of upstream.body) res.write(chunk);
       return void res.end();
+    }
+
+    /**
+     * Put the document on a public URL.
+     *
+     * `session_id` is a LOOKUP, not an instruction: it selects an entry this process created,
+     * and the script name comes off that entry. A body that could name the script would be a
+     * body that could overwrite any Worker on the account.
+     */
+    if (req.method === "POST" && req.url === "/api/publish") {
+      if (!canPublish) return void json(res, 501, { error: "publishing is not configured" });
+      const body = await readJson(req);
+      const minted = typeof body.session_id === "string" ? started.get(body.session_id) : undefined;
+      if (!minted) return void json(res, 403, { error: "unknown session" });
+
+      const html = String(body.html ?? "");
+      if (!html.trim()) return void json(res, 400, { error: "nothing to publish yet" });
+      if (html.length > MAX_HTML) {
+        return void json(res, 413, { error: "this page is too big to publish — ask for something smaller" });
+      }
+
+      try {
+        minted.url = await publish(minted.site, html);
+        console.log(`published ${minted.site} → ${minted.url}`);
+        return void json(res, 200, { url: minted.url });
+      } catch (err) {
+        console.error(`publish failed: ${err?.message ?? err}`);
+        return void json(res, 502, { error: String(err?.message ?? err) });
+      }
     }
 
     if (req.method === "GET" && req.url === "/sdk/tools.js") {
@@ -241,4 +388,4 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-server.listen(PORT, () => console.log(`pair up on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`build something on http://localhost:${PORT}`));

@@ -21,9 +21,11 @@ sibling. One can be copied out of this repo and still work.
 
 | Example | Stack | Shows |
 | --- | --- | --- |
-| [`coding-companion`](./demo/coding-companion) | Node + browser | Two models in one call: she decides to build via a client tool, a cheaper model writes the code — the build outlives the 2.5s tool deadline, so `write_program` returns a receipt and she polls with `check_program` |
+| [`coding-companion`](./demo/coding-companion) | Node + browser | A builder you talk to: she starts a build via a client tool, a cheaper model writes one standalone HTML page, it renders in a sandboxed iframe and publishes to a Cloudflare Worker — build and publish both outlive the 2.5s deadline, so both are a receipt she polls with `check_app` |
 | [`livestream`](./demo/livestream) | Node + browser | An audience is not a new primitive: a TikTok-Live room of comments, gifts and hearts all ride the one `lk.chat` topic, and she performs to a crowd she can't see |
+| [`live-shopping`](./demo/live-shopping) | Node + browser | The same room with a cart in it, where a sentence stops being a performance and becomes an offer: she is not allowed to know the price, five verbs hand her every figure she may say, and each one expires when the fact behind it does |
 | [`math-studio`](./demo/math-studio) | Node + browser | Keeping the tool plane a fixed size as the app grows: a tool per thing on screen fails to register at the eleventh, so six generic verbs act on a curriculum registered in the page, and adding a manipulative costs no tool and no brief |
+| [`terminal-tutor`](./demo/terminal-tutor) | Node + browser | She draws on the screen and never sends a coordinate: `highlight` takes `text:delay` or `line:14` and the page resolves it, because a model cannot see the page it is pointing at — teaching vim and tmux from behind translucent glass |
 
 > This repository is **private**. A link to an example only opens for someone who already has
 > repo access — so anywhere one of these is offered as "clone the code", say so. The packages
@@ -64,6 +66,7 @@ example gallery is configured outside this repository and is not covered by that
 5. **A stated cost** if it starts a call — minutes are billed, and someone running an example
    should know that before they run it.
 6. **Its own default port**, so two examples can run side by side. Taken today: 4192
-   coding-companion, 4193 canvas-tools, 4198 livestream, 4199 math-studio.
+   coding-companion, 4193 canvas-tools, 4194 terminal-tutor, 4197 live-shopping, 4198
+   livestream, 4199 math-studio.
 
 Keep them small. An example is read far more often than it is run.

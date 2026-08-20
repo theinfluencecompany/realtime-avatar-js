@@ -32,6 +32,16 @@ concurrency:
 
 jobs:
   npm:
+    # Publish ONLY from the public repo. This file is carried into it verbatim, so without
+    # this guard it runs in both — and a provenance attestation records the source repo and
+    # commit into Sigstore's public transparency log, which is append-only and permanent
+    # (Linux Foundation Immutable Record). Publishing from the private repo would therefore
+    # put its name and SHAs in front of the whole world, irreversibly.
+    #
+    # npm also requires package.json `repository` to match where you publish from. Ours
+    # points at the public repo, so a private-repo publish fails anyway — but failing by
+    # accident is not a control, and the failure mode here cannot be walked back.
+    if: github.repository == 'theinfluencecompany/realtime-avatar-js'
     runs-on: ubuntu-latest
     permissions:
       contents: read

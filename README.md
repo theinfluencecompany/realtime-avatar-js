@@ -139,9 +139,14 @@ Every example runs standalone — copy one out of the repo and it still works.
 
 | | |
 | --- | --- |
-| [**coding-companion**](./apps/demo/coding-companion) | Two models in one call: your character is the conversation, a cheaper model is the editor, and they drive it through the tool plane |
+| [**coding-companion**](./apps/demo/coding-companion) | A builder you talk to: the character is the conversation, a cheaper model writes the page, and they ship it to a public URL through the tool plane |
 | [**livestream**](./apps/demo/livestream) | An audience is not a new primitive — comments, gifts and hearts all ride one chat topic |
+| [**live-shopping**](./apps/demo/live-shopping) | The character is not allowed to know the price — every commercial figure comes back from a tool and expires when the fact behind it does |
 | [**math-studio**](./apps/demo/math-studio) | A tool plane that stays six tools wide however far the app grows — the things on screen register with the page, not with the character |
+| [**terminal-tutor**](./apps/demo/terminal-tutor) | The character draws on the screen to teach vim and tmux, and never sends a coordinate — they name the thing, the page resolves where it is |
+
+See [`apps/README.md`](./apps/README.md) for what a new example has to contain and which tier
+it belongs in.
 
 ---
 

@@ -17,13 +17,15 @@
  * THE BRIEF IS COMPOSED HERE, IN ONE ORDER. Persona first, then the invariant base — the page
  * never contributes a character of it. Ordering is load-bearing and the reason is below.
  *
- * THE VOICE IS NOT SENT. Voice ids are not discoverable and a wrong one returns 200 and then
- * simply sounds like someone else, so a preset earns its way into the mint only after a human
- * has confirmed it by ear. See the registry below.
+ * THE VOICE IS PINNED ONLY WHEN PROVEN. Voice ids are not discoverable, and a wrong one fails in
+ * whichever of three ways it feels like — 422 at mint, a worker that never joins, or a call that
+ * joins, talks, fires tools and renders silence. So a preset reaches the mint only once its audio
+ * has been checked, which is what the registry below is for. All three of this cast have been.
  */
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
 
 const PORT = Number(process.env.PORT ?? 4199);
@@ -44,8 +46,12 @@ const rta = new RealtimeAvatar({ apiKey, userAgent: "demo-math-studio" });
  * teaches nothing — set one per character to get all three, set none and this resolves a single
  * avatar the way every other example here does and the picker collapses to that one.
  *
- * `hue` is the only visual: the page draws a monogram from the name, so there are no image files
- * to ship and a character costs one object.
+ * Her face before the video track exists is `characters/<slug>.webp`, and `hue` is what is drawn
+ * instead when there is no such file — see the /portrait route below. A character costs one
+ * object; the picture is optional.
+ *
+ * `clips` is a state map: the character reads each `when` and switches herself between them.
+ * Optional too — with none, the platform renders her without one.
  */
 const CAST = [
   {
@@ -53,6 +59,26 @@ const CAST = [
     voice: "lin-warm-female",
     persona: "You are Ms. Lin, a woman in her thirties, and a warm, patient teacher. "
       + "Speak as a woman, in a warm female voice.",
+    /* Clips must open and close on the same rest pose or the switch is a jump, and `when` is read
+       by her rather than evaluated by anything — so it is written as direction, not as a rule. */
+    clips: {
+      idle: {
+        when: "the normal resting state: you have set a task and are waiting for them to work on it",
+        url: "https://v3b.fal.media/files/b/0aa6455b/rHM1C6v-v0EMeD7hU8XTA_video.mp4",
+      },
+      happy: {
+        when: "they got it right and you are praising them",
+        url: "https://v3b.fal.media/files/b/0aa64692/xhIppRYGlm2gmWwONkyAQ_video.mp4",
+      },
+      gentle: {
+        when: "they got it wrong and you are about to demonstrate the method again",
+        url: "https://v3b.fal.media/files/b/0aa64690/6zGC7Of_2oUnZv5V5VuR2_video.mp4",
+      },
+      cheer: {
+        when: "the run is finished and the report card is showing",
+        url: "https://v3b.fal.media/files/b/0aa6468f/idw2cqUu4Ec_H1e-hlzK7_video.mp4",
+      },
+    },
   },
   {
     slug: "wang", name: "Mr. Wang", blurb: "brisk and encouraging", hue: 208, env: "AVATAR_ID_WANG",
@@ -80,11 +106,51 @@ if (!CAST.some((c) => c.avatarId)) {
     process.exit(1);
   }
   CAST[0].avatarId = single;
+  /* Her clips are footage of the author's Ms. Lin. On somebody else's avatar they are footage of
+     somebody else, so they go rather than travel — and so does the picture, below. */
+  delete CAST[0].clips;
   console.log(`no per-character avatar set — the cast is ${CAST[0].name} on ${single}`);
 }
 const TEACHERS = Object.fromEntries(CAST.filter((c) => c.avatarId).map((c) => [c.slug, c]));
 function pickTeacher(slug) {
   return TEACHERS[slug] ?? Object.values(TEACHERS)[0];
+}
+
+/**
+ * Clips are prepared once and cached by URL hash; the serve path only ever LOADS that cache, so a
+ * clip that was never prepared does nothing at all on the first call after you add it — no error,
+ * just an avatar that ignores its state map. `syncClips` is idempotent, which is why it belongs at
+ * boot rather than behind a flag, and it is not fatal: a studio that cannot reach the sync endpoint
+ * should still open, with her rendered the way an avatar with no state map is rendered.
+ */
+async function syncClips() {
+  const withClips = Object.values(TEACHERS).filter((c) => c.clips);
+  if (!withClips.length) return;
+  console.log("  clips:");
+  for (const c of withClips) {
+    try {
+      await rta.syncClips(c.avatarId, Object.values(c.clips).map((s) => s.url));
+      console.log(`    ${c.slug.padEnd(7)} ${Object.keys(c.clips).length} states prepared`);
+    } catch (err) {
+      console.warn(`    ${c.slug.padEnd(7)} sync failed (${err?.message ?? err}) — `
+        + "she will render without her state map");
+      delete c.clips;
+    }
+  }
+}
+
+/** Drawn rather than fetched, for a cast with no picture beside it. Two letters and one hue. */
+function monogram({ name, hue }) {
+  const initials = name.replace(/[^A-Za-z ]/g, "").split(/\s+/).filter(Boolean)
+    .slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">`
+    + `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="hsl(${hue} 58% 64%)"/>`
+    + `<stop offset="1" stop-color="hsl(${(hue + 22) % 360} 52% 38%)"/></linearGradient></defs>`
+    + `<rect width="200" height="200" fill="url(#g)"/>`
+    + `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" `
+    + `font-family="ui-rounded,system-ui,sans-serif" font-size="78" font-weight="700" `
+    + `fill="rgba(255,255,255,.94)">${initials}</text></svg>`;
 }
 
 /**
@@ -94,57 +160,111 @@ function pickTeacher(slug) {
  * change to carry a voice — that passthrough is the whole hook. What it cannot tell you is
  * whether what you sent was real, and the platform will not either:
  *
- *   - no catalogue endpoint (/voices, /tts/voices, /voice-catalog all 404)
+ *   - no catalogue endpoint (/voices, /tts/voices, /voice-catalog, /tts/providers all 404)
  *   - every avatar reports `defaultVoiceId: null`
  *   - the mint response carries no voice field at all
  *   - a well-shaped spec with a nonexistent id returns 200 and then sounds like someone else
  *
- * That last one is the bug. A wrong id is indistinguishable from a right one until a human
- * listens, so this layer's job is to remove every OTHER way of being wrong.
+ * That last one, measured: `{provider:"cartesia", voice_id:"not-a-real-voice-id"}` mints a
+ * session. So does the same nonsense under `breezeblue` and under `fish`. A wrong id is
+ * indistinguishable from a right one until a human listens, and this layer's job is to remove
+ * every OTHER way of being wrong.
+ *
+ * WHAT THE PROVIDER FIELD ACCEPTS, and it is not what the contracts package says. The mint
+ * rejects `provider:"qwen"` outright:
+ *
+ *     422 voice.provider: Invalid discriminator value. Expected 'cartesia' | 'breezeblue' | 'fish'
+ *
+ * `libs/contracts` still carries `qwenVoiceSpecSchema` in the `voiceSpecSchema` union, so a spec
+ * that typechecks against the SDK can still be refused on the wire. Three presets here used to be
+ * qwen, which meant this registry could not have worked at all — every one of them was a 422
+ * waiting for someone to verify it, and the only reason nothing broke is that the gate below
+ * meant none of them was ever sent.
  */
 const VOICE_PRESETS = {
+  /**
+   * Fish, because it is the provider this key can actually reach — see the table above
+   * VOICE_UNVERIFIED for what the other one does.
+   *
+   * WHERE THE ID COMES FROM. Fish calls a voice a "model", and its console never shows you a
+   * field called `voice_id` — it puts the id in the address bar. Open the voice and read
+   * `modelId` out of the URL:
+   *
+   *     https://fish.audio/app/text-to-speech/?modelId=933563129e564b19a115bedd57b7406a
+   *                                                    └──────── voice_id ────────────┘
+   *
+   * The name beside it ("Sarah") is a label and is not accepted anywhere.
+   */
   "lin-warm-female": {
-    provider: "qwen", mode: "design",
-    instruct: "A warm, patient female teacher in her thirties speaking English. Unhurried, clear, gentle.",
+    provider: "fish", voice_id: "933563129e564b19a115bedd57b7406a", language: "en",
   },
+  /* The shape a real id goes in. Both are flagged at boot, in /api/voices and in red in the
+     picker, because a placeholder that fails quietly is the same class of bug as a wrong id
+     that fails quietly. */
   "wang-brisk-male": {
-    provider: "qwen", mode: "design",
-    instruct: "A brisk, encouraging male teacher speaking English. Energetic but not loud.",
+    provider: "fish", voice_id: "536d3a5e000945adb7038665781a4aca", language: "en",
   },
   "wukong-playful": {
-    provider: "qwen", mode: "design",
-    instruct: "A playful, mischievous young male voice speaking English. Bright and quick.",
-  },
-  /* Left here deliberately, as the shape a real id goes into. It is flagged at boot, in
-     /api/voices and in red in the picker, because a placeholder that fails quietly is the same
-     class of bug as a wrong id that fails quietly. */
-  "lin-cartesia": {
-    provider: "cartesia", model: "cartesia/sonic-3",
-    voice_id: "REPLACE_WITH_REAL_CARTESIA_VOICE_ID", language: "en",
+    provider: "fish", voice_id: "1efa8ccc674947ccb9b62ab01bdac058", language: "en",
   },
 };
 
 /**
- * NOTHING IN HERE IS SENT until a human takes its name out of this set.
+ * NOTHING IN HERE IS SENT until its audio has been checked and its name taken out of this set.
  *
- * Sending a guess is strictly worse than sending nothing: with `voice` omitted the platform makes
- * its own choice, whereas naming a provider forces that engine and inherits whatever its default
- * speaker is. That is not hypothetical — pinning `{provider:"qwen", mode:"design"}` on Ms. Lin to
- * try to make her female is what turned her male. The lab picker can still force one explicitly,
- * because that is exactly how it gets verified.
+ * A WRONG VOICE DOES NOT JUST SOUND WRONG. Measured on this key, against the same avatar and the
+ * same brief, with only the `voice` field changing:
+ *
+ *   voice                                     worker joins?  audio
+ *   ────────────────────────────────────────  ─────────────  ─────────────────────────────────
+ *   omitted entirely                          yes            speaks; gender is the platform's
+ *                                                            coin toss, and it landed MALE on
+ *                                                            a persona that says "a woman"
+ *   {provider:"cartesia", voice_id:<real>}    NO             nothing to join, call dies at 15s
+ *   {provider:"cartesia", voice_id:<fake>}    NO             identical failure
+ *   {provider:"fish",     voice_id:<foreign>} yes            SILENT — totalAudioEnergy 9e-8 and
+ *                                                            11 kB of RTP in 90s: comfort noise
+ *   {provider:"fish",     voice_id:<real>}    yes            speaks — energy 1.09, 131 kB in 30s
+ *
+ * Read the two Cartesia rows together: it fails the same way with an id that cannot possibly
+ * exist, which says the integration is not reachable from this key rather than that the id is
+ * wrong. Then read the two Fish rows together. Same provider, same shape, same 200 at the mint,
+ * same worker joining, same transcripts, same tools firing — and one renders no speech at all.
+ * Nothing on the page distinguishes them except the audio itself.
+ *
+ * So there are three ways to be wrong here and only one of them announces itself:
+ *
+ *   1. a provider the wire does not take        → 422 at mint, loud, cheap
+ *   2. a provider the key cannot reach          → worker never joins, call dies at the deadline
+ *   3. a real-shaped id the engine cannot use   → 200, joins, talks, and is silent
+ *
+ * WHAT WAS MEASURED. Voiced frames off a live call, through a YIN estimator. Male speech sits
+ * around 85-155 Hz and female around 165-255, so pitch settles the question the brief kept
+ * losing — with `voice` omitted the platform reads neither the face nor the persona.
+ *
+ *   lin-warm-female   147 voiced   median 193 Hz   p10-p90 151-255   74% above 165   FEMALE
+ *   wang-brisk-male    78 voiced   median  99 Hz   p10-p90  86-128  100% below 155   MALE
+ *   wukong-playful    122 voiced   median 158 Hz   p10-p90 104-249   48/44% split    see below
+ *
+ * The Monkey King does not classify, and that is a real result rather than a broken one: a
+ * playful young character voice has an expressive range, and his sits across the boundary
+ * instead of on one side of it. What the measurement DOES establish for him is the thing this
+ * gate exists for — he renders audio rather than silence. Whether he sounds right for the part
+ * is a casting question, and the ear that picked the id is the authority on it.
  */
-const VOICE_UNVERIFIED = new Set(["lin-warm-female", "wang-brisk-male", "wukong-playful", "lin-cartesia"]);
+const VOICE_UNVERIFIED = new Set();
 
 /**
- * Mirrors `voiceSpecSchema` from the contracts package. A hand-written mirror rather than an
- * import, because a stale mirror that rejects something valid is a far better failure than a
- * missing check that lets a typo through to a silent wrong voice. The platform's schema is
- * `.strict()`, so `voiceId` instead of `voice_id` is a 422 on the whole call — worth catching
- * once at boot rather than once per call.
+ * Mirrors the mint's voice schema. A hand-written mirror rather than an import, because a stale
+ * mirror that rejects something valid is a far better failure than a missing check that lets a
+ * typo through to a silent wrong voice. The platform's schema is `.strict()`, so `voiceId`
+ * instead of `voice_id` is a 422 on the whole call — worth catching once at boot rather than
+ * once per call.
+ *
+ * These three are what the wire accepts, verified against it rather than copied from
+ * `libs/contracts` — which also lists `qwen`, and the mint 422s on `qwen`.
  */
 const VOICE_SHAPES = {
-  qwen:       { required: [], optional: ["mode", "speaker", "instruct", "prompt_b64"],
-                enums: { mode: ["preset", "design", "clone"] } },
   cartesia:   { required: ["voice_id"], optional: ["model", "speed", "emotion", "language"] },
   breezeblue: { required: ["voice_id"], optional: ["model", "guidance_scale", "instructions", "language"] },
   fish:       { required: ["voice_id"], optional: ["model", "speed", "emotion", "language"] },
@@ -163,9 +283,6 @@ function validateVoice(name, spec) {
   for (const [k, values] of Object.entries(shape.enums ?? {})) {
     if (spec[k] !== undefined && !values.includes(spec[k])) bad.push(`${name}: "${k}" must be one of ${values}`);
   }
-  if (spec.provider === "qwen" && !spec.speaker && !spec.instruct && !spec.prompt_b64) {
-    bad.push(`${name}: qwen needs one of speaker, instruct or prompt_b64 — otherwise it selects nothing`);
-  }
   return bad;
 }
 
@@ -179,15 +296,27 @@ if (voiceProblems.length) {
   process.exit(1);
 }
 
-/** The spec to send for a character — or undefined, which is very often the right answer. */
+/**
+ * Is this preset fit to send on a real call?
+ *
+ * TWO gates, not one. `VOICE_UNVERIFIED` is a human saying "I have not checked this one's audio
+ * yet"; the placeholder check is the machine saying "this is not even an id". They are separate
+ * because taking a name out of the set is a one-line edit somebody will make before pasting the
+ * id in — and a `voice_id` still reading `REPLACE_WITH_…` is accepted at the mint like any other
+ * string, then joins and renders nothing. Exactly the failure this registry exists to prevent.
+ */
+const sendable = (name) =>
+  Boolean(name) && !VOICE_UNVERIFIED.has(name) && placeholders(VOICE_PRESETS[name] ?? {}).length === 0;
+
+/** The spec to send for a character — or undefined, which is currently the answer for all three. */
 const voiceFor = (slug) => {
   const name = TEACHERS[slug]?.voice;
-  return name && !VOICE_UNVERIFIED.has(name) ? VOICE_PRESETS[name] : undefined;
+  return sendable(name) ? VOICE_PRESETS[name] : undefined;
 };
 /** The preset NAME actually being sent — null when we deliberately send nothing. */
 const presetNameFor = (slug) => {
   const name = TEACHERS[slug]?.voice;
-  return name && !VOICE_UNVERIFIED.has(name) ? name : null;
+  return sendable(name) ? name : null;
 };
 /** Whitelisted lookup for the lab. Never trust a spec off the wire; only a name. */
 const presetByName = (name) =>
@@ -195,7 +324,7 @@ const presetByName = (name) =>
 
 const listPresets = () => Object.entries(VOICE_PRESETS).map(([name, spec]) => ({
   name, provider: spec.provider,
-  summary: spec.voice_id ?? spec.speaker ?? spec.instruct?.slice(0, 60) ?? "-",
+  summary: spec.voice_id ?? "-",
   placeholder: placeholders(spec).length > 0,
   verified: !VOICE_UNVERIFIED.has(name),
   assignedTo: CAST.filter((c) => c.voice === name && c.avatarId).map((c) => c.slug),
@@ -252,12 +381,17 @@ All that should have been said is:
 
 Every turn: call the tool first, then speak.
 
-WHILE THEY WORK. Nothing on their screen reaches you unless you ask. Every eight to ten seconds
-call answer with no heard value: it tells you whether the workspace holds an answer yet, and its
-result carries since_last_call, a summary of what they have been doing. Name what they did and
-say one short thing about it - never read the field out. If you get still_working instead, their
-hand is on it: say nothing about it and look again next time. After two silent checks, remind
-them they can work on screen or type into the box under the board.
+WHILE THEY WORK. What they do on the workspace does not reach you unless you ask. Every eight to
+ten seconds call answer with no heard value: it tells you whether the workspace holds an answer
+yet, and its result carries since_last_call, a summary of what they have been doing. Name what
+they did and say one short thing about it - never read the field out. If you get still_working
+instead, their hand is on it: say nothing about it and look again next time. After two silent
+checks, remind them they can work on screen or type into the box under the board.
+
+What they TYPE is different and arrives on its own, as if they had said it out loud - it can land
+in the middle of your sentence. When it does, stop and deal with it: it is them interrupting you,
+and they interrupted for a reason. If what they typed is a number it is their answer, so call
+answer as you would for one you heard.
 
 Right answer: call celebrate correct, praise briefly, then next_task. Wrong answer: never say
 the word wrong - say you will show it, call demonstrate, then let them try again.`;
@@ -266,7 +400,11 @@ the word wrong - say you will show it, call demonstrate, then let them try again
 const STRANDS = new Set(["geometry", "trigonometry", "signals"]);
 
 /** Served raw so this example needs no build step. A real app imports the package and bundles it. */
-const TOOLS_MODULE = createRequire(import.meta.url).resolve("@theinfluencecompany/realtime-avatar-tools");
+const require_ = createRequire(import.meta.url);
+const TOOLS_MODULE = require_.resolve("@theinfluencecompany/realtime-avatar-tools");
+/* The browser package is several files that import each other by relative path, so the folder is
+   what gets served, not one file — the page imports the entry and the rest follows. */
+const BROWSER_DIR = dirname(require_.resolve("@theinfluencecompany/realtime-avatar-browser"));
 
 /** Calls THIS process minted, so /api/end can only end its own. */
 const started = new Map();
@@ -320,12 +458,14 @@ const server = createServer(async (req, res) => {
        * gained three hundred characters. Ordering is free; being 85% of the way into the
        * prompt is not.
        *
-       * Note what is NOT the fix: pinning `{provider:"qwen", mode:"design"}` to force a female
-       * voice is what turned her male in the first place (see VOICE_UNVERIFIED above), because naming a
-       * provider forces that engine and inherits its default speaker. Sending no `voice` is
-       * deliberate, and the `unverified` gate that keeps it that way is doing its job.
+       * AND IT IS STILL NOT ENOUGH. The persona is first, it says "a woman in her thirties" and
+       * "speak as a woman in a warm female voice", and she has been coming out male anyway. The
+       * brief is the only lever left while `voice` is unpinned, and it is losing — which makes
+       * the placeholder in `lin-warm-female` the actual bug, not a nicety. A real voice id in
+       * there is what settles her gender; nothing in this string can be relied on to.
        *
-       * Independent of all that: a brief that never says who she is was simply missing something.
+       * (An older note here blamed `{provider:"qwen", mode:"design"}` for turning her male. It
+       * cannot have: the mint 422s on qwen, so that spec never reached a call.)
        */
       const instructions = [teacher.persona, BASE].filter(Boolean).join("\n\n");
       if (instructions.length > 4000) {
@@ -409,10 +549,11 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && path === "/api/teachers") {
-      /* Only what the page draws with. The persona is her brief and the avatar id is a
-         capability — neither has any business in a response a browser can read. */
+      /* Only what the page draws with — and the face is not in here, it is a URL the page builds
+         from the slug. The persona is her brief and the avatar id is a capability; neither has
+         any business in a response a browser can read. */
       return void json(res, 200, Object.values(TEACHERS).map(
-        ({ slug, name, blurb, hue }) => ({ slug, name, blurb, hue })));
+        ({ slug, name, blurb }) => ({ slug, name, blurb })));
     }
 
     /** The voice registry, so the lab can offer exactly what is configured and nothing else. */
@@ -420,8 +561,37 @@ const server = createServer(async (req, res) => {
       return void json(res, 200, listPresets());
     }
 
+    /**
+     * Her face for the window before there is a video track.
+     *
+     * The platform's avatar record carries no portrait — `{id, displayName, sourceKind, status,
+     * defaultVoiceId}` — so a face is a file that ships beside the cast that names it, and only
+     * ever matches the cast that named it. Hence the fallback: `characters/<slug>.webp` if it is
+     * there, a monogram drawn from the name and `hue` if it is not, so somebody running this on
+     * their own three avatars gets three distinguishable faces rather than three broken images.
+     */
+    if (req.method === "GET" && path.startsWith("/portrait/")) {
+      const slug = path.slice("/portrait/".length).replace(/[^a-z0-9-]/gi, "");
+      const teacher = TEACHERS[slug];
+      if (!teacher) return void json(res, 404, { error: "no_such_teacher" });
+      const cache = { "cache-control": "max-age=3600" };
+      try {
+        const webp = await readFile(new URL(`./characters/${slug}.webp`, import.meta.url));
+        return void res.writeHead(200, { ...cache, "content-type": "image/webp" }).end(webp);
+      } catch {
+        return void res.writeHead(200, { ...cache, "content-type": "image/svg+xml; charset=utf-8" })
+          .end(monogram(teacher));
+      }
+    }
+
     if (req.method === "GET" && path === "/sdk/tools.js") {
       const js = await readFile(TOOLS_MODULE);
+      return void res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" }).end(js);
+    }
+    if (req.method === "GET" && path.startsWith("/sdk/browser/")) {
+      const f = path.slice("/sdk/browser/".length);
+      if (!/^[a-z0-9-]+\.js$/i.test(f)) return void json(res, 404, { error: "not_found" });
+      const js = await readFile(join(BROWSER_DIR, f));
       return void res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" }).end(js);
     }
     if (req.method === "GET" && (path === "/" || path === "/index.html")) {
@@ -464,14 +634,20 @@ for (const c of Object.values(TEACHERS)) console.log(`    ${c.slug.padEnd(7)} ${
 console.log("  voices:");
 for (const c of Object.values(TEACHERS)) {
   const spec = VOICE_PRESETS[c.voice], ph = placeholders(spec);
+  const why = ph.length ? `placeholder in ${ph.join(",")}`
+            : VOICE_UNVERIFIED.has(c.voice) ? "unverified by ear" : null;
   console.log(`    ${c.slug.padEnd(7)} ${c.voice} (${spec.provider})  `
-    + (VOICE_UNVERIFIED.has(c.voice)
-        ? `NOT SENT — unverified by ear${ph.length ? `, placeholder in ${ph.join(",")}` : ""}`
-        : "✓ sent"));
+    + (why ? `NOT SENT — ${why}` : "✓ sent"));
 }
-if (!Object.values(TEACHERS).some((c) => presetNameFor(c.slug))) {
-  console.log("    → no voice is being sent at all. That is the safe default: an unproven spec");
-  console.log("      forces an engine and inherits its default speaker. Verify one by ear in the");
-  console.log("      picker, then take its name out of VOICE_UNVERIFIED.");
+/* A character with no voice pinned is not a neutral default — the platform picks, it reads
+   neither the face nor the persona, and it has been landing MALE on a brief that says "a woman".
+   So the absence gets the same billing at boot as a failure would. */
+for (const c of Object.values(TEACHERS)) {
+  if (presetNameFor(c.slug)) continue;
+  console.log(`    → ${c.name} has NO VOICE PINNED, so the platform picks one and her gender is a`);
+  console.log("      coin toss on every call. Put a Fish model id — the `modelId` in the fish.audio");
+  console.log("      URL — in her preset, hear it in the lab picker, then take that preset's name");
+  console.log("      out of VOICE_UNVERIFIED. Cartesia specs do not start the worker on this key.");
 }
+await syncClips();
 server.listen(PORT, () => console.log(`studio is open -> http://localhost:${PORT}`));

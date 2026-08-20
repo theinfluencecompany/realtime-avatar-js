@@ -85,8 +85,17 @@
          `cover` crops the sides, so the taller the slot the more it crops — at 1:2 you are looking
          at a nose. Tying the height to the column's own width caps the crop at 1:1.45 whatever
          the window does; the max-height is the second belt, for very wide columns. Any slack goes
-         to the panel below, which is the same colour and so does not read as a hole. */
-      .face { position:relative; flex:0 1 auto; aspect-ratio:1 / 1.45;
+         to the panel below, which is the same colour and so does not read as a hole.
+
+         `width:100%` is load-bearing and not redundant. A flex item with `aspect-ratio` whose
+         height is then clamped by `max-height` leaves two readings available: keep the stretched
+         width and let the box grow wider than the ratio, or run the ratio backwards and shrink
+         the width to match the clamped height. Chrome takes the first. Something else — reported
+         on Safari — takes the second, and the portrait then narrows the moment `max-height` bites,
+         showing the column's own background as a bar down the right of her. An explicit width is
+         definite, so the ratio has only the height left to decide and the reading stops mattering. */
+      .face { position:relative; flex:0 1 auto; width:100%; align-self:stretch;
+              aspect-ratio:1 / 1.45;
               max-height:min(62vh, 560px); min-height:190px; background:#0d0f14; }
       video,.still { position:absolute; inset:0; width:100%; height:100%; display:block;
                      object-fit:cover; object-position:center 24%; background:#0d0f14; }
@@ -271,7 +280,12 @@
          track and then publishes silence is the failure this demo has always been most exposed to
          — and folding the meter away meant the one instrument that shows it was behind a click. */
       .micbar { background:var(--room-chip); border-radius:11px; padding:6px 10px 6px 6px; }
-      .micbar #micstate { margin-left:auto; font-weight:650; }
+      /* It holds one word when things are fine and a device name plus a verdict when they are
+         not, so it is allowed to wrap and the level bar gives up the room. */
+      .micbar #micstate { margin-left:auto; font-weight:650; text-align:right; max-width:58%; }
+      /* #micmsg holds a live level while it is working and, when it is not, the browser's own
+         sentence plus the one naming the fix — which is two lines, not a word on a row. */
+      #micmsg { display:block; line-height:1.45; }
       .micbar.bad { background:#3a1f1c; }
       body.lite .micbar.bad { background:#fbe6e2; }
       .mic .lv { flex:1 1 auto; height:6px; background:var(--room-line); border-radius:999px;
@@ -438,7 +452,7 @@
           <details class="setup" id="setup">
             <summary><b id="setupsum">setup</b><i>▾</i></summary>
             <div class="body">
-              <select id="voicesel" title="Voice preset — the registry in voices.json"></select>
+              <select id="voicesel" title="Voice preset — the registry in server.mjs"></select>
               <select id="micdev"></select>
               <div class="mic" id="micmsg">Microphone</div>
             </div>
@@ -473,8 +487,8 @@
                  placeholder="Type an answer, or say something to her…" />
           <button type="submit">Send</button>
         </form>
-        <p class="tellnote" id="tellnote">There is no channel from this page to her, so anything you
-          type rides home on her next tool call.</p>
+        <p class="tellnote" id="tellnote">Typing reaches her at once, and cuts her off if she is
+          talking. A bare number is their answer too.</p>
       </section>
     </div></div></div>
 
@@ -502,10 +516,40 @@
       <div id="registry" class="pane"></div>
     </aside>
 
+    <script>
+      /* ══ A DEAD PAGE HAS TO SAY SO ═══════════════════════════════════════════
+         Everything below is one `<script type="module">`. A module that throws while it is
+         evaluating — a failed import, a syntax error, a null on line one — stops at that point
+         and takes every handler after it with it. What is left on screen is the markup: a page
+         that looks finished, with a green button that does nothing and a caption still inviting
+         you to press it. There is no way to tell that from a slow network, so it gets reported
+         as "the page is stuck" and the console is the only place the reason exists.
+
+         This runs in a CLASSIC script, before the module, so it is already listening when the
+         module fails. It writes the reason where someone is already looking. */
+      (() => {
+        const show = (what, detail) => {
+          const says = document.getElementById("says"), err = document.getElementById("err");
+          if (err) err.textContent = `${what}: ${detail}`;
+          if (says) says.textContent = "This page did not finish loading — see the red line below.";
+          document.getElementById("call")?.setAttribute("disabled", "");
+        };
+        addEventListener("error", (e) => {
+          // A failed <script>/<img>/<link> fires error on the element and carries no message.
+          if (e.target && e.target !== window) {
+            return void show("failed to load", e.target.src || e.target.href || String(e.target.tagName));
+          }
+          show("script error", e.message || String(e.error));
+        }, true);
+        addEventListener("unhandledrejection", (e) =>
+          show("unhandled rejection", String(e.reason?.message ?? e.reason)));
+      })();
+    </script>
     <script type="module">
       import { Room, RoomEvent, createLocalAudioTrack, createAudioAnalyser }
         from "https://esm.sh/livekit-client@2.19.2";
       import { attachAvatarTools, TOOL_DEADLINE_MS } from "/sdk/tools.js";
+      import { enableMicrophone } from "/sdk/browser/index.js";
       const $ = (id) => document.getElementById(id);
 
       /* ══ SPLIT PANE ══════════════════════════════════════════════════════════ */
@@ -576,7 +620,7 @@
         };
         return {
           http:(n,a,r,ms) => add("HTTP",n,a,r,ms), room:(n,a,r,ms) => add("ROOM",n,a,r,ms),
-          tool:(n,a,r,ms) => add("TOOL",n,a,r,ms), say:(s) => add("SAY","her","",s),
+          tool:(n,a,r,ms) => add("TOOL",n,a,r,ms), say:(s,who="her") => add("SAY",who,"",s),
           work:(n,a,r) => add("WORK",n,a,r),
           mic:(n,a,r) => add("MIC",n,a,r), fx:(n,a) => add("FX",n,a), err:(n,a) => add("ERR",n,a),
         };
@@ -1411,9 +1455,16 @@
 
       /* ══ SESSION STATE ═══════════════════════════════════════════════════════ */
       const RUN = 10;
-      const save = JSON.parse(localStorage.getItem("mathstudio")
-        || '{"levelId":"geo.pythagoras","acc":null}');
-      const persist = () => localStorage.setItem("mathstudio", JSON.stringify(save));
+      /* The key carries the defaults' version, because a default only means anything to somebody
+         who has never run this. Change what the page opens on and every existing visitor keeps
+         the old one forever, having never chosen it — which looks exactly like the change not
+         working. Bumping the suffix retires the old state instead of migrating it: this is ten
+         practice questions and a percentage, not something worth carrying forward. */
+      const SAVE_KEY = "mathstudio.v2";
+      const save = JSON.parse(localStorage.getItem(SAVE_KEY)
+        || '{"levelId":"sig.fourier","acc":null}');
+      const persist = () => localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+      localStorage.removeItem("mathstudio");     // v1, superseded
       let level = RUNNABLE.find((l) => l.id === save.levelId) ?? RUNNABLE[0];
       let task = null, active = null;          // active = the mounted manipulative
       let done = 0, right = 0, streak = 0, wrongRun = 0, history = [], t0 = 0;
@@ -1628,7 +1679,7 @@
       const Activity = (() => {
         let pending = [], lastAt = 0;
         const pull = () => {
-          const fresh = [...Learner.drain(), ...(active?.events?.() ?? [])];
+          const fresh = active?.events?.() ?? [];
           if (fresh.length) { pending.push(...fresh); lastAt = performance.now(); }
         };
         /* Drained on a timer, not only when she asks. Stamping `lastAt` at collection time made
@@ -1659,9 +1710,10 @@
         };
       })();
 
-      /* Trace, time, and — because the platform gives the page no way to push — hand back
-         anything that happened on the workspace since her last call. Every result carries it, so
-         whichever tool she reaches for next is the one that delivers the news. */
+      /* Trace, time, and hand back anything that happened on the workspace since her last call.
+         Every result carries it, so whichever tool she reaches for next is the one that delivers
+         the news. A page CAN push — that is what the text box does — but pushing a drag would
+         interrupt her once per frame, so the workspace rides here instead. */
       /** How long after a clean registration to stop believing she is about to speak. */
       const SILENCE_MS = 15000;
       const TOOL_NAMES = Object.keys(VERBS);
@@ -1795,7 +1847,7 @@
             $("says").textContent = "That preset still has a REPLACE_WITH_ placeholder — it cannot resolve.";
         };
         for (const p of presets.filter((p) => p.placeholder))
-          Trace.err("voice placeholder", `${p.name} — edit voices.json before trying it`);
+          Trace.err("voice placeholder", `${p.name} — edit VOICE_PRESETS in server.mjs before trying it`);
       })().catch((e) => Trace.err("voices", String(e)));
 
       /* ══ MOTION AND THE ROOM ═════════════════════════════════════════════════
@@ -1808,17 +1860,25 @@
       $("mo").onclick = () => { setMotion(!calm); Sfx.play("tap"); Trace.fx("motion", calm ? "reduced" : "on"); };
       setMotion(matchMedia("(prefers-reduced-motion: reduce)").matches);
 
+      /* Versioned for the same reason the session state is: a stored "dark" from before the
+         default changed would outlive the change and look like it never happened. */
+      const THEME_KEY = "ms_theme.v2";
       const setTheme = (t) => {
         document.body.classList.toggle("lite", t === "lite");
         $("th").textContent = t === "lite" ? "light room" : "dark room";
-        localStorage.setItem("ms_theme", t);
+        localStorage.setItem(THEME_KEY, t);
       };
       $("th").onclick = () => {
         const next = document.body.classList.contains("lite") ? "dark" : "lite";
         setTheme(next); Sfx.play("tap"); Trace.fx("room", next);
       };
-      setTheme(localStorage.getItem("ms_theme")
-        ?? (matchMedia("(prefers-color-scheme: light)").matches ? "lite" : "dark"));
+      /* Light by default. The board is white in both themes, so the light room is the one where
+         the page and the thing being taught are the same surface — the dark room is for a
+         darkened classroom, which is the exception. A stored choice still wins over both, and
+         the OS preference is no longer consulted: it is a preference about operating systems,
+         not about whether a maths workspace reads better on paper. */
+      localStorage.removeItem("ms_theme");       // v1, superseded
+      setTheme(localStorage.getItem(THEME_KEY) ?? "lite");
 
       /* The one line the collapsed setup drawer shows. Everything inside it is set once a session,
          so the summary has to say enough that you know whether you need to open it — and it turns
@@ -1830,17 +1890,6 @@
       }
       setupSummary();   // seed it on boot; after that only the voice and mic handlers touch it
 
-      /* ══ THE LEARNER'S OWN QUEUE ═════════════════════════════════════════════
-         The piggyback, one level up. Manipulatives already hand back what happened on them
-         through `events()`; this is the same channel for things the learner does that no
-         manipulative owns — typing being the only one so far. Both are drained into
-         `since_last_call` by the tool wrapper, so whichever verb she reaches for next is the one
-         that delivers the news, and she still cannot be told anything before she asks. */
-      const Learner = (() => {
-        const q = [];
-        return { push: (e) => q.push(e), drain: () => q.splice(0, q.length) };
-      })();
-
       /* ══ KEYPAD ══════════════════════════════════════════════════════════════ */
       let tapped = null;
       $("pad").innerHTML = Array.from({length:21},(_,i) => `<button data-n="${i}">${i}</button>`).join("");
@@ -1848,7 +1897,7 @@
         Juice.pop(b,1.18,.84); Sfx.play("tap");
         if (!task) { $("says").textContent = "No task yet — wait for the teacher."; return; }
         tapped = Number(b.dataset.n);
-        Trace.work("learner tapped", tapped, "queued for her next tool call");
+        Trace.work("learner tapped", tapped, "staged for her next answer call");
         $("says").textContent = `Tapped ${tapped} — waiting for the teacher.`; };
 
       /* ══ TYPING TO HER ═══════════════════════════════════════════════════════
@@ -1857,10 +1906,23 @@
          that hide the keypad ignore it, because the answer to "thread both rings" is the number
          two and a text box next to that question is a button marked win.
 
-         Whatever the text is, it goes into the piggyback queue as well, so she reads it on her
-         next tool call. That is not a message channel and the note under the box says so. */
+         THE TEXT ITSELF IS A TURN. `sendText` on the `lk.chat` topic is the page → agent channel,
+         and a line arriving on it lands the way a sentence out loud does: she takes the floor from
+         herself and answers it. So typing INTERRUPTS her, mid-word, which is the whole reason to
+         put a box under a talking teacher — a learner who is lost at second three of the
+         explanation should not have to sit through the other twenty to say so.
+
+         Which is exactly why the workspace does NOT use this channel. A drag fires events by the
+         frame and the Fourier mixer fired fifteen in four seconds; as turns that is fifteen
+         interruptions, and she would never finish a sentence. Those ride `since_last_call` on her
+         next tool call instead — ambient, and gated on a hand that has stopped moving. Two
+         channels, and the question that picks between them is whether the thing that just happened
+         has earned the right to take the floor. Typing has. Moving a slider has not. */
       let typed = null;
-      $("tell").onsubmit = (e) => {
+      /** Our own lines come back as transcription. Kept so the caption can tell who said what. */
+      const sentByUs = new Set();
+      const clip = (s, n = 40) => s.slice(0, n).replace(/[<>&]/g, "");
+      $("tell").onsubmit = async (e) => {
         e.preventDefault();
         const text = $("tellin").value.trim();
         if (!text) return;
@@ -1870,49 +1932,146 @@
         const n = /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : null;
         const answerable = n != null && level.input !== "workspace";
         if (answerable) typed = n;
-        Learner.push({ t:"typed", text, ...(answerable ? { as_answer: n } : {}) });
+
+        /* No room, no channel. Staging the number is still worth doing — it is waiting for the
+           first `answer` call of the next session — but the sentence had nowhere to go, and
+           saying so is the whole difference between a quiet failure and an explained one. */
+        if (!room) {
+          $("tellnote").innerHTML = answerable
+            ? `<b>${n}</b> is staged as their answer — start the call and she will check it.`
+            : "She is not in the room yet — start the call, then type.";
+          Trace.work("learner typed", text, "no call — nowhere to send it");
+          return;
+        }
+
+        sentByUs.add(text);
+        try {
+          await room.localParticipant.sendText(text, { topic: "lk.chat" });
+        } catch (err) {
+          sentByUs.delete(text);
+          $("tellnote").innerHTML = `<b>“${clip(text)}”</b> did not send — ${clip(String(err?.message ?? err), 80)}`;
+          Trace.err("typed line not sent", err?.message ?? String(err));
+          return;
+        }
+        Trace.say(text, "you");
         $("tellnote").innerHTML = answerable
-          ? `<b>${n}</b> is waiting as their answer — she gets it on her next tool call.`
-          : `<b>“${text.slice(0, 40).replace(/[<>&]/g, "")}”</b> queued — she gets it on her next tool call.`;
+          ? `<b>${n}</b> is with her now, and staged as their answer.`
+          : `<b>“${clip(text)}”</b> is with her now.`;
         Trace.work("learner typed", text,
-          answerable ? `answer ${n}, queued for her next tool call` : "queued for her next tool call");
+          answerable ? `sent on lk.chat; answer ${n} staged` : "sent on lk.chat");
       };
 
       /* ══ MICROPHONE ══════════════════════════════════════════════════════════
-         Continuity (iPhone as mic) is the trap: it enumerates, getUserMedia hands back a live
-         track, and it stays silent unless the phone is active. Prefer the built-in, and always
-         constrain with `exact` — without it the browser treats deviceId as a hint. */
+         Six things can stop a microphone and they have six different fixes, so nothing here
+         branches on `NotAllowedError` itself — `enableMicrophone` does the classifying and hands
+         back a REASON and the sentence that names the fix. Two of them are why it is worth the
+         import: a macOS denial reads as a browser denial and is fixed in System Settings with a
+         browser restart, and an unanswered prompt may per spec never settle at all, so the wait
+         has to have a deadline or the page hangs mid-connect with no error to show.
+
+         LIVE BUT SILENT is the seventh and it is not one of the six, because nothing rejects: the
+         device enumerates, getUserMedia hands back a track, `readyState` is "live", `muted` is
+         false, and every sample is zero. An iPhone on Continuity does it whenever the phone is
+         asleep; so does a virtual input with nothing routed into it, and so does hardware muted
+         below the browser. Only a meter finds it, which is why the meter is on the panel and not
+         behind the drawer — and why the DEVICE NAME goes next to the verdict. "Silent" on its own
+         is not actionable; "MacBook Pro Microphone is silent" is. */
       /** One word on the panel, the detail in the drawer, and the drawer's summary goes red with
-       *  it. Everything that knows something about the microphone routes through here. */
+       *  it. Everything that knows something about the microphone routes through here.
+       *
+       *  A bad state also OPENS the drawer. The one control that fixes most of these is the device
+       *  picker, and leaving it folded away behind a summary that has merely turned red means the
+       *  fix is one click further away than the problem. */
       function micState(word, bad = false) {
         $("micstate").textContent = word;
         $("micbar").classList.toggle("bad", bad);
         $("micmsg").classList.toggle("bad", bad);
+        if (bad) $("setup").open = true;
         setupSummary();
       }
       const isContinuity = (l = "") => /iphone|ipad|continuity/i.test(l);
-      const isBuiltIn = (l = "") => /macbook|built-?in/i.test(l);
+      const isBuiltIn = (l = "") => /macbook|built-?in|内置|麦克风/i.test(l);
+      /** The input the call should publish: one a meter has PROVEN, or one the user picked by
+       *  hand. Never the boot heuristic's guess — that is a suggestion for the self-test, and
+       *  forcing a guessed device onto the call can replace a working default with a silent one. */
+      let micChoice = null;
       let meterStop = null, testTrack = null;
+      /** Inputs already proven silent this session, so the hunt below cannot loop on one. */
+      const micTried = new Set();
+      /**
+       * A silent input is a dead end the page can walk out of by itself.
+       *
+       * Telling somebody "check System Settings > Sound" is telling them to go and debug their
+       * operating system, and the commonest causes here are not settings at all: a paired iPhone
+       * that Continuity offers as a microphone whenever it is asleep, a virtual device with
+       * nothing routed into it, a headset that disconnected its input but not its output. In all
+       * of them ANOTHER input on the same machine works fine. So try them.
+       *
+       * Only ever entered from proof — three seconds of a live track whose every sample is zero
+       * — so it cannot take a working microphone away from anybody. It stops when something is
+       * heard or when the machine runs out of inputs, and it says which it was.
+       */
+      async function huntForALiveInput(fromId, tag) {
+        micTried.add(fromId ?? "default");
+        const ds = (await navigator.mediaDevices.enumerateDevices())
+          .filter((d) => d.kind === "audioinput" && d.deviceId && d.deviceId !== "communications");
+        /* Deduplicate by groupId first. `enumerateDevices` lists one physical microphone twice —
+           once under its own id and once as the "default" alias pointing at it — so a hunt that
+           only tracks ids spends its second attempt re-testing the device that just failed, and
+           reports one more silent input than the machine actually has. */
+        const triedGroups = new Set(ds.filter((d) => micTried.has(d.deviceId)).map((d) => d.groupId));
+        // Continuity last: it is the one that reliably hands back a live track and no audio.
+        const left = ds.filter((d) => !micTried.has(d.deviceId) && !triedGroups.has(d.groupId))
+          .sort((a, b) => (isContinuity(a.label) ? 1 : 0) - (isContinuity(b.label) ? 1 : 0));
+        if (!left.length) {
+          $("micmsg").textContent += ` Every input on this machine has now been tried `
+            + `(${micTried.size}) and all of them were silent, so the problem is below the browser: `
+            + `check macOS System Settings > Sound > Input and watch whether the level moves when `
+            + `you speak.`;
+          Trace.err("mic hunt", `exhausted — ${micTried.size} input(s), all silent`);
+          return;
+        }
+        const next = left[0];
+        Trace.mic("trying another input", next.label || next.deviceId, `${tag} was silent`);
+        $("micmsg").textContent += ` Trying "${(next.label || "the next input").slice(0, 24)}"…`;
+        $("micdev").value = next.deviceId;
+        micChoice = next.deviceId;
+        if (room) {
+          await room.switchActiveDevice("audioinput", next.deviceId, true);
+          const t = room.localParticipant.getTrackPublication("microphone")?.track;
+          if (t) runMeter(t, "in-call");
+        } else {
+          await testMic(next.deviceId);
+        }
+      }
       function runMeter(lkTrack, tag) {
         meterStop?.();
         const { calculateVolume, cleanup } = createAudioAnalyser(lkTrack, { smoothingTimeConstant:.2 });
         const ms = lkTrack.mediaStreamTrack;
+        const label = (ms?.label || "this input").slice(0, 28);
+        const short = label.length > 17 ? label.slice(0, 16) + "…" : label;
+        const id = ms?.getSettings?.().deviceId;
         let peak = 0, heard = false, raf = 0, maxV = 0, warned = false;
         const st = performance.now();
         (function tick() {
           const v = calculateVolume(); maxV = Math.max(maxV, v);
           if (v > .004 && !heard) { heard = true; micState("live");
-            Trace.mic("signal", tag, `peak ${(maxV*1000).toFixed(0)}`); }
+            micChoice = id ?? micChoice;
+            micTried.clear();          // this one works; a later failure gets the full list again
+            Trace.mic("signal", tag, `${label} · peak ${(maxV*1000).toFixed(0)}`); }
           peak = Math.max(Math.min(1, v*6), peak*.9);
           $("miclv").style.width = (peak*100).toFixed(0)+"%";
           if (heard) { if ($("micmsg").classList.contains("bad")) { $("micmsg").classList.remove("bad"); setupSummary(); }
-            $("micmsg").textContent = `live · ${(maxV*1000).toFixed(0)}`; }
+            $("micmsg").textContent = `${label} · live · ${(maxV*1000).toFixed(0)}`; }
           else if (!warned && performance.now()-st > 3000) {
-            warned = true; micState("silent", true);
+            warned = true;
+            micState(`${short} — silent`, true);
             $("micmsg").textContent = isContinuity(ms?.label)
-              ? `"${ms.label.slice(0,22)}" is an iPhone Continuity mic — silent unless the phone is active.`
-              : `Live but silent (muted:${ms?.muted} ${ms?.readyState}). Check Privacy → Microphone.`;
-            Trace.err("mic silent", `${ms?.label} muted:${ms?.muted}`);
+              ? `"${label}" is an iPhone Continuity mic — it hands back a live track and stays `
+                + `silent unless the phone is awake.`
+              : `"${label}" is live (muted:${ms?.muted}, ${ms?.readyState}) and every sample is zero.`;
+            Trace.err("mic silent", `${ms?.label} muted:${ms?.muted} — ${tag}`);
+            huntForALiveInput(id, label).catch((e) => Trace.err("mic hunt", String(e?.message ?? e)));
           }
           raf = requestAnimationFrame(tick);
         })();
@@ -1925,27 +2084,74 @@
         if (activeId) $("micdev").value = activeId;
         return ds;
       }
+      /** The one place a microphone failure is turned into something on screen. `reason` is the
+       *  panel's word because it is already the short name of the cause, and inventing a second
+       *  vocabulary for it is inventing something to keep in sync. */
+      function micFailed(mic, where) {
+        micState(mic.reason, true);
+        $("micmsg").textContent = `${mic.message} — ${mic.hint}`;
+        Trace.err(`mic ${where}`, `${mic.reason} — ${mic.message}`);
+      }
       async function testMic(deviceId) {
         micState("testing…"); $("micmsg").textContent = "…";
-        try {
-          await testTrack?.stop();
+        await testTrack?.stop();
+        /* `enableMicrophone` asks for anything with a `localParticipant.setMicrophoneEnabled` —
+           the interface is structural on purpose, so the self-test can borrow it before there is
+           a room to hand it. What that buys here is the deadline and the named causes. */
+        const mic = await enableMicrophone({ localParticipant: { setMicrophoneEnabled: async () => {
           testTrack = await createLocalAudioTrack(deviceId ? { deviceId:{ exact: deviceId } } : {});
-          await listMics(testTrack.mediaStreamTrack.getSettings().deviceId);
-          $("micmsg").textContent = "listening…";
-          runMeter(testTrack, "self-test");
-        } catch (e) {
-          micState(e.name === "NotAllowedError" ? "denied" : "failed", true);
-          $("micmsg").textContent = e.name === "NotAllowedError" ? "Microphone permission denied" : String(e.message ?? e);
-          Trace.err("mic test", e.name ?? String(e));
-        }
+        } } });
+        if (!mic.ok) return void micFailed(mic, "test");
+        await listMics(testTrack.mediaStreamTrack.getSettings().deviceId);
+        $("micmsg").textContent = "listening…";
+        runMeter(testTrack, "self-test");
       }
-      $("mictest").onclick = () => testMic($("micdev").value || null);
-      $("micdev").onchange = () => testMic($("micdev").value);
+      /* `enableMicrophone` never throws, but enumerating devices after it can — and this runs from
+         a click, where a rejection is an unhandled promise nobody is looking at. */
+      const runTest = (id) => testMic(id).catch((e) => {
+        micState("failed", true);
+        $("micmsg").textContent = String(e?.message ?? e);
+        Trace.err("mic test", String(e?.message ?? e));
+      });
+      $("mictest").onclick = () => { micTried.clear(); runTest($("micdev").value || null); };
+      /**
+       * Picking a device has to mean it DURING a call as well, and this is where it did not.
+       * The handler only ever ran the self-test, which opens a second, separate track — so on a
+       * live call you could watch the picker prove a working microphone while the call went on
+       * publishing the silent one. The meter said "live", the tutor still heard nothing, and
+       * nothing on the page connected the two.
+       *
+       * `switchActiveDevice` replaces the input on the published track, which is the only thing
+       * that changes what she hears. `true` is exact: without it deviceId is a hint the browser
+       * may ignore, and being quietly ignored is the failure we are here to fix.
+       */
+      $("micdev").onchange = async () => {
+        const id = $("micdev").value;
+        micChoice = id || null;              // an explicit choice, so the next call starts here too
+        micTried.clear();                    // and a fresh start for the hunt if this one is silent
+        if (!room) return void runTest(id);
+        try {
+          await room.switchActiveDevice("audioinput", id, true);
+          const t = room.localParticipant.getTrackPublication("microphone")?.track;
+          if (t) runMeter(t, "in-call");
+          Trace.mic("switched", $("micdev").selectedOptions[0]?.textContent ?? id, "on the live call");
+        } catch (e) {
+          micState("switch failed", true);
+          $("micmsg").textContent = `Could not move the call to that input: ${e?.message ?? e}`;
+          Trace.err("mic switch", String(e?.message ?? e));
+        }
+      };
+      /* A first guess, and only a guess: labels are the only signal available before anything has
+         been heard, and they are localised, so this ranks rather than decides. Continuity goes
+         last because it is the one that hands back a live silent track. Whatever it picks is a
+         suggestion for the self-test — `micChoice` stays null until a meter or a human confirms
+         one, and the call uses the system default until then. */
       (async () => {
         const ds = await listMics();
         if (!ds.length || !ds[0].label) return;
-        const best = ds.find((d) => isBuiltIn(d.label))
-                  ?? ds.find((d) => !isContinuity(d.label) && !/^default/i.test(d.label)) ?? ds[0];
+        const best = ds.find((d) => isBuiltIn(d.label) && !isContinuity(d.label))
+                  ?? ds.find((d) => !isContinuity(d.label) && !/^default/i.test(d.label))
+                  ?? ds.find((d) => !isContinuity(d.label)) ?? ds[0];
         $("micdev").value = best.deviceId;
       })().catch(() => {});
 
@@ -1953,33 +2159,18 @@
          Three circles under her own panel, and picking one swaps the face above them. Her name
          and blurb move into the caption block, because that is the one place on the page where
          a sentence in her voice belongs. */
-      /* Her face before there is a video track, drawn rather than fetched. The platform's avatar
-         record carries no portrait — {id, displayName, sourceKind, status, defaultVoiceId} — so
-         any image here would be a file shipped alongside, and a file shipped alongside is a file
-         that only matches the author's cast. A monogram matches whoever is actually configured. */
-      const portrait = ({ name, hue }) => {
-        const initials = name.replace(/[^A-Za-z ]/g, "").split(/\s+/).filter(Boolean)
-          .slice(0, 2).map((w) => w[0].toUpperCase()).join("");
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">`
-          + `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">`
-          + `<stop offset="0" stop-color="hsl(${hue} 58% 64%)"/>`
-          + `<stop offset="1" stop-color="hsl(${(hue+22)%360} 52% 38%)"/></linearGradient></defs>`
-          + `<rect width="200" height="200" fill="url(#g)"/>`
-          + `<text x="100" y="104" text-anchor="middle" dominant-baseline="central" `
-          + `font-family="ui-rounded,system-ui,sans-serif" font-size="78" font-weight="700" `
-          + `fill="rgba(255,255,255,.94)">${initials}</text></svg>`;
-        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-      };
-
+      /* Her face before there is a video track comes from the server, at /portrait/<slug>: a
+         picture if the cast ships one, a monogram drawn from the name if it does not. The page
+         does not need to know which — either way it is one URL per character. */
       let chosen = null;
       (async () => {
         const roster = await (await fetch("/api/teachers")).json();
         Trace.http("GET /api/teachers","",`${roster.length} teachers`);
         $("pick").innerHTML = roster.map((t) => `
           <button class="who" data-slug="${t.slug}" data-name="${t.name}" data-blurb="${t.blurb}"
-                  title="${t.name} — ${t.blurb}"><img src="${portrait(t)}" alt="${t.name}" /></button>`).join("");
+                  title="${t.name} — ${t.blurb}"><img src="/portrait/${t.slug}" alt="${t.name}" /></button>`).join("");
         $("pick").onclick = (e) => { const el = e.target.closest(".who"); if (!el) return;
-          chosen = el.dataset.slug; $("still").src = el.querySelector("img").src;
+          chosen = el.dataset.slug; $("still").src = `/portrait/${chosen}`;
           $("whoname").textContent = `${el.dataset.name} · ${el.dataset.blurb}`;
           Sfx.play("tap"); Juice.pop(el,1.06,.94); Trace.fx("teacher", chosen);
           $("pick").querySelectorAll(".who").forEach((x) => x.classList.toggle("on", x === el)); };
@@ -1988,6 +2179,11 @@
 
       /* ══ CALL ════════════════════════════════════════════════════════════════ */
       let room = null, sessionId = null, herSpoke = false, silenceTimer = 0, herPeak = 0;
+      /** Her audio meter's cancel, held here so the call teardown can reach it. */
+      let herMeterStop = null;
+      /** Everything per-frame this call started. Called on End, on Disconnected and on the way
+       *  out of a failed start, so a page that has run six calls is running none of them. */
+      const stopCallMeters = () => { herMeterStop?.(); meterStop?.(); meterStop = null; };
       /** Her caption doubles as the connection status, so it has to stop being the status the
        *  moment she says anything — and it has to keep moving until then. It used to be written
        *  once, to "Connecting…", and then only ever again by a transcription: a call that
@@ -2049,15 +2245,47 @@
             }
             t.attach();
             status("She is on air — she speaks first, so give her a moment.");
-            const { calculateVolume: herVol } = createAudioAnalyser(t, { smoothingTimeConstant:.3 });
+            /* HER METER HAS TO BE STOPPABLE, and it was not.
+               `createAudioAnalyser` hands back a `cleanup` alongside `calculateVolume`; this
+               destructured only the second and dropped the first on the floor, and the loop that
+               reads it was an IIFE with no handle to cancel. So every call left behind an
+               AudioContext, an AnalyserNode and a requestAnimationFrame loop that ran for the
+               life of the PAGE — reading an FFT and touching the ring's class every frame, on a
+               track that had been dead since the call ended.
+               One call, invisible. Start and end six without reloading and six of them are
+               running at once, and the seventh click lands on a main thread already spending
+               every frame on the corpses of the first six. That is the End button that takes a
+               second to notice you. */
+            herMeterStop?.();
+            const { calculateVolume: herVol, cleanup: herCleanup } =
+              createAudioAnalyser(t, { smoothingTimeConstant:.3 });
+            let herRaf = 0, ringOn = null;
             (function h() { const v = herVol();
               herPeak = Math.max(herPeak, v);
-              $("ring").classList.toggle("on", v > .02 && !videoUp);
-              requestAnimationFrame(h); })();
+              // Only write when it changes: `.ring.on` moves a border-width, so a toggle every
+              // frame is a layout every frame for a value that changes a few times a sentence.
+              const on = v > .02 && !videoUp;
+              if (on !== ringOn) { ringOn = on; $("ring").classList.toggle("on", on); }
+              herRaf = requestAnimationFrame(h); })();
+            herMeterStop = () => {
+              cancelAnimationFrame(herRaf);
+              herCleanup?.().catch(() => {});
+              $("ring").classList.remove("on");
+              herMeterStop = null;
+            };
           });
-          room.on(RoomEvent.TranscriptionReceived, (segs) => {
+          room.on(RoomEvent.TranscriptionReceived, (segs, participant) => {
             const last = segs[segs.length-1];
             if (!last?.text) return;
+            /* THE LEARNER IS ON THIS EVENT TOO. Their speech is transcribed and their typed lines
+               come back as a turn, and neither carries a label — only the participant does. Without
+               this the caption under her face shows the learner their own sentence, attributed to
+               her, and `herSpoke` latches on it: the status line then goes quiet believing she has
+               started talking when nothing has come out of her yet. */
+            if (participant?.identity && participant.identity === room?.localParticipant?.identity) {
+              if (last.final !== false && !sentByUs.delete(last.text)) Trace.say(last.text, "you");
+              return;
+            }
             herSpoke = true; clearTimeout(silenceTimer);
             $("says").textContent = last.text;
             if (last.final === false) return;
@@ -2074,7 +2302,7 @@
             if (aside) Trace.err("stage direction spoken aloud", aside[0]);
           });
           room.on(RoomEvent.Disconnected, (r) => { Trace.room("Disconnected", r ?? "");
-            clearTimeout(silenceTimer); herSpoke = false;
+            clearTimeout(silenceTimer); herSpoke = false; stopCallMeters();
             $("says").textContent = "Session over."; $("call").disabled = false;
             $("leave").disabled = true; room = null; refreshSpend(); });
 
@@ -2083,26 +2311,30 @@
           Trace.room("connected", g.grant.room_name, "", Math.round(performance.now()-tc));
           status("In the room. Waiting for her worker…");
 
-          /* A refused microphone is no longer fatal. It used to throw, which killed a call that
-             had already connected and published her video — and back then that was honest, because
-             without a microphone there was no way to answer. There is a box under the board now,
-             so a missing microphone costs one input out of four and the lesson goes ahead. */
-          try { await room.localParticipant.setMicrophoneEnabled(true); }
-          catch (e) {
-            const why = e?.name === "NotAllowedError"
-              ? "Microphone permission denied — type your answers in the box instead."
-              : String(e?.message ?? e);
-            micState(e?.name === "NotAllowedError" ? "denied" : "failed", true);
-            $("micmsg").textContent = why;
-            $("err").textContent = why;
-            Trace.err("setMicrophoneEnabled", String(e?.name ?? e?.message ?? e));
-          }
-          const micTrack = room.localParticipant.getTrackPublication("microphone")?.track;
-          if (micTrack) runMeter(micTrack, "in-call");
-          else { micState("no track", true); $("micmsg").textContent = "No microphone track"; }
+          /* TOOLS FIRST, MICROPHONE SECOND, and the order is the whole point.
+             Her brief tells her to open the moment the call connects, so by the time we are back
+             from `connect` she is already talking and already reaching for `next_task`. Anything
+             awaited before the manifest is registered is time she spends calling tools that are
+             not there yet — and what that looks like from the outside is a workspace that stays
+             empty while she talks, which reads as a page that has hung rather than a race.
 
+             Asking for the microphone is exactly that kind of await: a permission prompt is a
+             human deciding, and `enableMicrophone` will wait up to fifteen seconds for one. It
+             does not need to hold the tool plane hostage while it does. */
           const tr = performance.now();
-          const reg = await attachAvatarTools(room, TOOLS, { timeoutMs:15000 });
+          /* If her worker never joins, the likeliest cause that is not capacity is the `voice`
+             this call pinned: a provider the key cannot reach takes the render
+             side down BEFORE it joins, and the mint said 200 about twenty seconds ago. Nothing
+             else on the page can know that, so this is where it gets said. */
+          let reg;
+          try {
+            reg = await attachAvatarTools(room, TOOLS, { timeoutMs:15000 });
+          } catch (e) {
+            if (!voicePreset) throw e;
+            throw new Error(`${e.message ?? e} — this call pinned the voice "${voicePreset}", and `
+              + `a voice the render side cannot load stops her worker before it joins. Set the `
+              + `voice back to "as assigned" and try again.`);
+          }
           Trace.room("tools registered", `${reg.accepted.length} accepted`,
             reg.rejected.length ? `rejected ${JSON.stringify(reg.rejected)}` : `deadline ${TOOL_DEADLINE_MS}ms`,
             Math.round(performance.now()-tr));
@@ -2111,21 +2343,77 @@
           renderTools();
           $("leave").disabled = false;
           status("Ready. She opens — she should greet you and set the first task.");
+
+          /* A refused microphone is no longer fatal. It used to throw, which killed a call that
+             had already connected and published her video — and back then that was honest, because
+             without a microphone there was no way to answer. There is a box under the board now,
+             so a missing microphone costs one input out of four and the lesson goes ahead.
+
+             THE CALL USES A DEVICE THAT WAS PROVEN, OR THE SYSTEM DEFAULT. `micChoice` is set
+             only when a meter has actually heard signal on an input, or when someone picked one
+             by hand. It is deliberately NOT the boot heuristic's guess: that guess ranks labels,
+             labels are localised, and forcing a guessed input onto the call can replace a working
+             default with a silent one — which is a worse bug than the one it was trying to avoid.
+             With nothing proven the call takes the system default, exactly as it did before, and
+             the meter says within three seconds if that was wrong. */
+          const enableMic = (deviceId) => enableMicrophone({ localParticipant: {
+            setMicrophoneEnabled: () => room.localParticipant.setMicrophoneEnabled(
+              true, deviceId ? { deviceId: { exact: deviceId } } : {}),
+          } });
+          /* Hand the device over first. The self-test track is still holding it, and on hardware
+             that does not share an input that is the difference between a call with a microphone
+             and `device-in-use` on a call the page itself broke. */
+          meterStop?.(); testTrack?.stop(); testTrack = null;
+          const wantedMic = micChoice;
+          let mic = await enableMic(wantedMic);
+          if (!mic.ok && wantedMic && mic.reason === "no-device") {
+            // Unplugged between the test and the start. A call on the default microphone beats a
+            // call with none, and the rail says which one is actually live.
+            Trace.err("mic device", `the selected input is gone — falling back to the OS default`);
+            mic = await enableMic(null);
+          }
+          if (!mic.ok) {
+            micFailed(mic, "in call");
+            $("err").textContent = `${mic.message} — ${mic.hint}`;
+          }
+          const micTrack = room.localParticipant.getTrackPublication("microphone")?.track;
+          if (micTrack) runMeter(micTrack, "in-call");
+          else if (mic.ok) { micState("no track", true); $("micmsg").textContent = "No microphone track"; }
+
           /* Everything above can succeed and she can still never say a word: the grant is fine,
              the room is fine, the tools are registered, and her worker simply does not open. That
              failure used to look exactly like a failure to connect, so it gets its own message and
              its own ERR row rather than leaving "Connecting…" on screen forever. */
-          silenceTimer = setTimeout(() => {
-            if (herSpoke) return;
-            /* Her audio track tells the two silences apart, and they are completely different
-               bugs: a worker that never opened its mouth, versus a worker that is talking while
-               `TranscriptionReceived` never fires. The caption is the only place either one shows,
-               so it has to say which. */
+          silenceTimer = setTimeout(function verdict() {
+            /* Two independent signals — is a transcript arriving, and is there any audio energy —
+               and the four combinations are four different bugs. The one that used to be missed
+               is BOTH-but-silent: transcripts land, tools fire, the page looks completely healthy
+               and not one sample of speech is ever rendered. Measured cause: a `voice` whose id
+               the engine accepts and cannot synthesise. Nothing else reports it. */
             const audible = herPeak > .01;
+            if (herSpoke && audible) return;
+            /* A tool call is proof of life, and a stronger one than either signal above. Her
+               worker opens in a couple of seconds on a quiet platform and has been measured at
+               over a minute on a busy one, so a fixed deadline on its own calls a slow start a
+               dead call. If she is reaching for tools she is alive and the wait is just a wait —
+               so say that, and look again rather than accusing her. */
+            if (Object.values(ToolStat).some((s) => s.calls)) {
+              status("She is working — tools are firing — but her voice has not arrived yet.");
+              silenceTimer = setTimeout(verdict, SILENCE_MS);
+              return;
+            }
+            const pinned = voicePreset ? ` The call pinned the voice "${voicePreset}" — a voice `
+              + `the engine accepts but cannot render is silent exactly like this.` : "";
+            if (herSpoke) {
+              status("Her words are arriving but no sound is." + pinned);
+              return void Trace.err("transcript but no audio",
+                `her audio peak ${(herPeak*1000).toFixed(0)} — the track is subscribed and carrying `
+                + `nothing${voicePreset ? ` · voice "${voicePreset}"` : ""}`);
+            }
             status(audible
               ? "She is speaking — but no transcript is arriving, so her words cannot be shown."
               : "Connected, tools registered — but she has not made a sound. Check the rail: "
-                + "ROOM rows show the join, SAY rows would be her transcript.");
+                + "ROOM rows show the join, SAY rows would be her transcript." + pinned);
             Trace.err(audible ? "speech but no transcript" : "no speech",
               `${Math.round(SILENCE_MS/1000)}s after tools registered · her audio peak `
               + `${(herPeak*1000).toFixed(0)} · grant, room and registration all succeeded`);
@@ -2137,6 +2425,7 @@
              from the page at all. The beacon covers the session the server minted for us. */
           const why = String(e.message ?? e);
           Trace.err("start", why);
+          stopCallMeters();
           try { await room?.disconnect(); } catch {}
           if (sessionId) { navigator.sendBeacon("/api/end", JSON.stringify({ session_id: sessionId }));
             sessionId = null; }
@@ -2147,7 +2436,21 @@
           $("says").textContent = "Could not connect.";
         }
       };
-      $("leave").onclick = () => { Trace.fx("leave clicked"); room?.disconnect(); };
+      /* End answers the click, THEN hangs up.
+         `disconnect()` is async and everything visible used to wait on `RoomEvent.Disconnected`,
+         so the button did nothing you could see until the room came back — and the meters this
+         call started were still eating frames the whole time, which is precisely when a page has
+         the least to spare. Acknowledge first, stop the per-frame work second (it is what frees
+         the thread), and only then start the teardown. */
+      $("leave").onclick = () => {
+        Trace.fx("leave clicked");
+        $("leave").disabled = true;
+        herSpoke = false;
+        $("says").textContent = "Ending…";
+        clearTimeout(silenceTimer);
+        stopCallMeters();
+        room?.disconnect();
+      };
       addEventListener("pagehide", () => {
         if (sessionId) navigator.sendBeacon("/api/end", JSON.stringify({ session_id: sessionId })); });
 
