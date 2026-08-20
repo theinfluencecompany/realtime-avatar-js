@@ -75,5 +75,9 @@ jobs:
             npm publish --dry-run --access public
           else
             npm pkg set version="0.0.0-main.$(date -u +%Y%m%d%H%M%S).$(git rev-parse --short HEAD)"
-            npm publish --access public
+            # --tag is REQUIRED: npm refuses to publish a prerelease without an explicit
+            # dist-tag, and this version is always a prerelease. Without it the publish
+            # fails at argument validation, before it ever authenticates.
+            # `next` also keeps these off `latest`, so `npm i` never resolves to a main build.
+            npm publish --access public --tag next
           fi

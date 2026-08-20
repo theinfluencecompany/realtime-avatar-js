@@ -19,7 +19,13 @@ jobs:
       # Build BEFORE test: libs/proxy resolves the client through node_modules, so its
       # tests need the built dist. This ordering caught a real failure on first CI run.
       - run: npm run build
+      # Tests are TypeScript run through --experimental-strip-types, which does not exist
+      # before Node 22.6 — on 20 the flag is a hard `bad option` exit, not a skip. Node 20
+      # is in this matrix to prove the SHIPPED artifact honours the `engines` floor, and
+      # typecheck + build + boundary above are what actually prove that: `dist` is plain
+      # JS, so a consumer on 20 never runs this suite.
       - run: npm test
+        if: matrix.node != '20'
       # Scans shipped JS, .d.ts AND sourcemaps. A sourcemap's sourcesContent embeds the
       # original source, so a clean source tree can still publish a leaky artifact.
       - run: npm run boundary
