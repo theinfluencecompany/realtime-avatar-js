@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coding companion</title>
+    <style>
+      :root { color-scheme: dark }
+      * { box-sizing: border-box }
+      body { margin: 0; min-height: 100svh; background: #0f0d0c; color: #f4efe9;
+        font: 14.5px/1.55 ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column;
+        align-items: center; gap: 12px; padding: 22px 16px 40px }
+      h1 { font-size: 19px; margin: 0; font-weight: 600 }
+      .sub { color: #9a938c; font-size: 13px; margin: -6px 0 2px; max-width: 620px; text-align: center }
+      .split { display: grid; grid-template-columns: 290px 1fr; gap: 14px; width: min(1000px, 96vw) }
+      @media (max-width: 780px) { .split { grid-template-columns: 1fr } }
+      .stage { aspect-ratio: 3/4; background: #0a0908; border: 1px solid #ffffff18; border-radius: 14px;
+        overflow: hidden; position: relative; display: grid; place-items: center }
+      video { width: 100%; height: 100%; object-fit: cover; display: none }
+      video.on { display: block }
+      .idle { color: #655e58; font-size: 13px }
+      .status { position: absolute; inset: auto 0 0 0; padding: 7px 10px; font-size: 12px;
+        background: linear-gradient(transparent, #000000cc); color: #ded6cd }
+      .panel { background: #131110; border: 1px solid #ffffff18; border-radius: 14px; display: flex;
+        flex-direction: column; overflow: hidden; min-height: 340px }
+      .tabs { display: flex; gap: 8px; padding: 7px 10px; border-bottom: 1px solid #ffffff12;
+        background: #181514; font: 12px ui-monospace, monospace; color: #8d8680 }
+      pre { margin: 0; padding: 12px 14px; overflow: auto; flex: 1; white-space: pre-wrap;
+        font: 12.5px/1.6 ui-monospace, monospace; color: #dfd8d1 }
+      .out { border-top: 1px solid #ffffff12; background: #0d0b0a; padding: 9px 14px; max-height: 150px;
+        overflow: auto; font: 12px/1.5 ui-monospace, monospace; color: #86d39a; white-space: pre-wrap }
+      .out.bad { color: #ff8b6f }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: min(1000px, 96vw) }
+      input, button { font: inherit; border: 1px solid #ffffff22; background: #1c1918; color: #f4efe9;
+        border-radius: 999px; padding: 9px 15px }
+      input { flex: 1; min-width: 260px; border-radius: 12px }
+      button { cursor: pointer }
+      button.primary { background: #ff5b3a; border-color: transparent; font-weight: 600 }
+      button:disabled { opacity: .45; cursor: default }
+      #log { width: min(1000px, 96vw); border: 1px solid #ffffff12; border-radius: 12px; padding: 9px 11px;
+        background: #151211; font: 12px/1.5 ui-monospace, monospace; max-height: 160px; overflow: auto }
+      #log b { color: #ff8b6f }
+    </style>
+  </head>
+  <body>
+    <h1>Coding companion</h1>
+    <p class="sub">
+      Ask for something out loud. She decides when to build: her tool starts the job, the code
+      streams into the panel and runs here in the browser — and she can only tell you how it
+      went by polling for the outcome.
+    </p>
+
+    <div class="split">
+      <div class="stage">
+        <video id="her" autoplay playsinline></video>
+        <span class="idle" id="idle">no call</span>
+        <div class="status" id="status">press Call</div>
+      </div>
+      <div class="panel">
+        <div class="tabs"><span id="file">no file yet</span><span id="meta"></span></div>
+        <pre id="code">Ask for something: “write a debounce function”.</pre>
+        <div class="out" id="out" style="display: none"></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="call">Call</button>
+      <button id="hang" disabled>Hang up</button>
+      <button id="run" disabled>Run it</button>
+    </div>
+    <div class="row"><input id="say" placeholder="speak, or type what you want built…" disabled /></div>
+    <div id="log"></div>
+
+    <script type="module">
+      import { Room, RoomEvent, Track } from "https://esm.sh/livekit-client@2.19.2";
+      // The non-React tool plane, served by this app's own server from the installed package.
+      // In a bundled app this is a plain import of "@theinfluencecompany/realtime-avatar-tools".
+      import { attachAvatarTools } from "/sdk/tools.js";
+
+      const $ = (id) => document.getElementById(id);
+      const say = (t) => ($("status").textContent = t);
+
+      // Why the microphone did not start. Published as @theinfluencecompany/realtime-avatar-browser;
+      // inlined so this example stays standalone. It returns a reason instead of throwing because
+      // "the mic won't start" is one sentence covering six causes with six different fixes — and
+      // one of them is not in the browser at all. Left unguarded (as this was), the rejection is an
+      // unhandled promise nobody watches and the page simply stops mid-connect.
+      async function startMic(room) {
+        if (!navigator.mediaDevices) return { ok: false, why: "This page is not a secure context. Use https, or http://localhost — a LAN address will not do." };
+        try {
+          // Per spec getUserMedia may neither resolve nor reject if the prompt is ignored.
+          const noAnswer = new Promise((r) => setTimeout(() => r("no-answer"), 15000));
+          const started = room.localParticipant.setMicrophoneEnabled(true).then(() => "ok");
+          if (await Promise.race([started, noAnswer]) === "no-answer") return { ok: false, why: "The microphone prompt was not answered — look for it in the address bar." };
+          return { ok: true };
+        } catch (err) {
+          const message = err?.message ?? String(err);
+          if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+            // Chromium reports a macOS system denial as NotAllowedError too, and THAT one the
+            // address bar cannot fix — so the two must never share a message.
+            return /by system|system permission/i.test(message)
+              ? { ok: false, why: "macOS is blocking the browser itself: System Settings > Privacy & Security > Microphone, then RESTART the browser." }
+              : { ok: false, why: "This site is blocked from the microphone — allow it from the address-bar icon and reload." };
+          }
+          if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") return { ok: false, why: "No microphone is available." };
+          if (err?.name === "NotReadableError" || err?.name === "TrackStartError") return { ok: false, why: "Another app or tab is holding the microphone." };
+          return { ok: false, why: message };
+        }
+      }
+      const esc = (s) => String(s).replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"));
+      const log = (who, text) => {
+        const d = document.createElement("div");
+        d.innerHTML = `<b>${who}</b> ${esc(text)}`;
+        $("log").append(d);
+        $("log").scrollTop = $("log").scrollHeight;
+      };
+
+      let room = null;
+      let sessionId = null;
+
+      // The slot is held from the moment the grant lands — BEFORE the room exists. A tab
+      // closed in that gap tells no one. `pagehide` + sendBeacon is the one goodbye that
+      // outlives a closing page; the server ends the call and the slot frees now instead of
+      // at the join timeout. Ending is idempotent, so firing after a normal hang-up is fine.
+      addEventListener("pagehide", () => {
+        if (sessionId) navigator.sendBeacon("/api/end", JSON.stringify({ session_id: sessionId }));
+      });
+      let code = "";
+      /** Typed turns echo back as transcriptions of ourselves. We logged them at the
+       *  keystroke, so the echo is skipped — otherwise every typed turn appears twice. */
+      const sentByUs = new Set();
+      /** The conversation the CODE model sees. Its system prompt is added server-side. */
+      const codeTurns = [];
+
+      /**
+       * Ask the code model and stream the answer into the panel.
+       *
+       * `runOutput` is what the sandbox printed last time. Passing it is what makes a fix a
+       * fix: without it every request is answered from scratch and the model re-invents the
+       * bug it was asked to remove.
+       */
+      async function writeCode(spec, runOutput = "") {
+        $("meta").textContent = "writing…";
+        codeTurns.push({
+          role: "user",
+          content: code ? `Here is the current file:\n\n${code}\n\nApply this change: ${spec}` : spec,
+        });
+
+        const res = await fetch("/api/code", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ messages: codeTurns, runOutput }),
+        });
+        if (!res.ok || !res.body) {
+          $("meta").textContent = "the code model is not answering";
+          return false;
+        }
+
+        // OpenAI-shaped SSE: accumulate `choices[].delta.content` and repaint as it arrives.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        code = "";
+        $("code").textContent = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl;
+          while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
+            try {
+              const piece = JSON.parse(data)?.choices?.[0]?.delta?.content;
+              if (!piece) continue;
+              code += piece;
+              $("code").textContent = code;
+              $("code").scrollTop = $("code").scrollHeight;
+            } catch {
+              // A frame split across chunks. The whole line re-arrives on the next read.
+            }
+          }
+        }
+
+        // The model is told not to fence its output; it sometimes does anyway, and a stray
+        // ``` is a syntax error in the sandbox rather than a cosmetic problem.
+        code = code.replace(/^```[a-z]*\n?/gm, "").replace(/```\s*$/gm, "").trim();
+        $("code").textContent = code;
+        codeTurns.push({ role: "assistant", content: code });
+        $("file").textContent = "program.js";
+        $("meta").textContent = `${code.split("\n").length} lines`;
+        $("run").disabled = false;
+        return true;
+      }
+
+      /**
+       * Run it, nowhere near this page.
+       *
+       * A Web Worker built from a blob: no DOM, no `window`, and a hard timeout, because the
+       * first program a model writes for "an infinite sequence" is an infinite loop and a
+       * `while (true)` on this thread takes the call down with it.
+       *
+       * It also waits for the ASYNC TAIL. Reporting the moment the synchronous part returned
+       * showed "(no output)" for working code whose only `console.log` sat inside a
+       * `setTimeout` — and she then said so out loud. So `setTimeout` is counted and the
+       * result is posted a tick after the last one has run, which also picks up `await
+       * sleep(…)` and plain promise callbacks. A program still pending when the 3.5s budget
+       * ends reports what it printed up to then rather than nothing.
+       */
+      function run() {
+        return new Promise((resolve) => {
+          const shim = `const __out=[];let __pending=0,__done=false;
+            const __post=(ok,error)=>{if(__done)return;__done=true;postMessage({ok,out:__out.join("\\n"),error});};
+            console.log=(...a)=>__out.push(a.map(x=>{try{return typeof x==="string"?x:JSON.stringify(x)}catch{return String(x)}}).join(" "));
+            const __later=self.setTimeout.bind(self);
+            // Settle on the NEXT tick, never on this one: an \`await sleep(200)\` resumes in a
+            // microtask AFTER the timer callback returns, and posting here would cut it off.
+            const __settle=()=>__later(()=>{if(__pending===0)__post(true)},0);
+            self.setTimeout=(fn,ms,...rest)=>{__pending++;return __later(()=>{
+              try{fn(...rest)}catch(e){__post(false,String(e&&e.stack||e));throw e}
+              finally{if(--__pending===0)__settle()}
+            },ms)};
+            self.onerror=(e)=>{__post(false,String(e.message||e));};
+            try{`;
+          const tail = `\n}catch(e){__post(false,String(e&&e.stack||e));throw e;}
+            // Work still outstanding hands over what has printed so far, so a program that
+            // outlives the 3.5s budget reports its output instead of nothing.
+            if(__pending>0)postMessage({ok:true,out:__out.join("\\n"),partial:true});
+            __settle();`;
+          const url = URL.createObjectURL(new Blob([shim + code + tail], { type: "text/javascript" }));
+          const worker = new Worker(url);
+          let partial = null;
+          const finish = (result) => {
+            worker.terminate();
+            URL.revokeObjectURL(url);
+            resolve(result);
+          };
+          const timer = setTimeout(
+            () => finish({ ok: false, out: partial?.out ?? "", error: "timed out after 3.5s" }),
+            3500,
+          );
+          worker.onmessage = (e) => {
+            if (e.data?.partial) return void (partial = e.data);
+            clearTimeout(timer);
+            finish(e.data);
+          };
+          worker.onerror = (e) => {
+            clearTimeout(timer);
+            finish({ ok: false, out: partial?.out ?? "", error: String(e.message ?? e) });
+          };
+        });
+      }
+
+      // ── the build job ──────────────────────────────────────────────────────────────────
+      /**
+       * One job slot, because that is what the page is: one file, one panel, one sandbox. A
+       * second build while one is writing would fight the first for `code` and the panel, so
+       * write_program refuses with {status:"busy"} instead of queueing — the same
+       * one-at-a-time the old `busy` flag enforced, now said out loud to her.
+       */
+      let job = null; // { id, status, attempt, printed }
+      let nextJob = 1;
+
+      /**
+       * Write it, run it, and if it broke, hand the error back and try again — three runs,
+       * two regenerations, the same loop this page used to fire from a regex router. What
+       * changed is who reads the outcome: it lands on `job`, where check_program finds it,
+       * instead of being steered into her next turn.
+       */
+      async function runJob(j, spec) {
+        if (!(await writeCode(spec))) {
+          j.printed = "the code model did not answer";
+          return void (j.status = "failed");
+        }
+        for (let attempt = 0; attempt <= 2; attempt++) {
+          j.attempt = attempt + 1;
+          j.status = "running";
+          const result = await run();
+          j.printed = [result.out, result.error].filter(Boolean).join("\n").trim();
+          $("out").style.display = "";
+          $("out").textContent = j.printed || "(no output)";
+          $("out").classList.toggle("bad", !result.ok);
+          if (result.ok) return void (j.status = "done");
+          if (attempt === 2) break;
+          j.status = "retrying";
+          // `j.printed` keeps the run error even if this rewrite fails — the last thing the
+          // sandbox said is more useful to her than a blank.
+          if (!(await writeCode("Fix the error above.", j.printed))) return void (j.status = "failed");
+        }
+        j.status = "failed";
+        $("meta").textContent = "still broken — say what you actually want";
+      }
+
+      // ── her tools ──────────────────────────────────────────────────────────────────────
+      // Descriptions are written FOR HER — they are the only thing that tells her model when
+      // a tool is the right move, so they say WHEN to call it, not just what it returns.
+      //
+      // The deadline is 2.5 seconds and a build with retries is tens of seconds: there is no
+      // version of write_program that returns a program. So it returns a RECEIPT and keeps
+      // its real promise on the panel, and she learns the outcome the way the user does — by
+      // asking, with check_program.
+      const TOOLS = {
+        write_program: {
+          description:
+            "Start writing and running a program from the user's request. Call this whenever they ask you to write, change, fix or extend code, passing their request in their own words. Returns a receipt immediately: the build takes seconds to tens of seconds, the code appears on the panel as it streams, and it retries itself when the program throws. Use check_program to learn the outcome. Only one build runs at a time — while one is live this returns {status:'busy'} instead of starting another.",
+          parameters: {
+            type: "object",
+            properties: {
+              request: {
+                type: "string",
+                description:
+                  "What to build or change, in the user's words. For an edit, state just the change — the current file is already in the code model's context.",
+              },
+            },
+            required: ["request"],
+            additionalProperties: false,
+          },
+          execute: ({ request }) => {
+            if (job && job.status !== "done" && job.status !== "failed") {
+              log("tool", `→ busy: job ${job.id} is still ${job.status}`);
+              return { status: "busy", job: job.id, message: "a build is already running — check_program for its progress" };
+            }
+            const j = { id: nextJob++, status: "writing", attempt: 0, printed: "" };
+            job = j;
+            // Deliberately not awaited: the receipt goes back inside the deadline while the
+            // build keeps its real promise on the panel. The catch is load-bearing — a
+            // thrown fetch mid-stream would otherwise leave this job stuck at "writing",
+            // and every later write_program would answer busy for the rest of the call.
+            runJob(j, String(request ?? "")).catch((err) => {
+              j.status = "failed";
+              j.printed = String(err?.message ?? err);
+              $("meta").textContent = "the build crashed — ask again";
+            });
+            log("tool", `→ job ${j.id} started`);
+            // A receipt, not a program. Saying "started" and not "done" is what keeps her
+            // from announcing a result that is tens of seconds away.
+            return { job: j.id, status: "started" };
+          },
+        },
+
+        check_program: {
+          description:
+            "How the current build is going and what the program printed. Call this when the user asks whether it worked, what it printed, or what happened — and before you claim any outcome yourself. status is writing, running, retrying, done or failed, and printed is the program's output or error. failed means the build gave up, so the request itself probably needs to change.",
+          parameters: { type: "object", properties: {}, additionalProperties: false },
+          execute: () => {
+            if (!job) {
+              log("tool", "→ no build yet");
+              return { status: "idle", message: "no build started yet — call write_program first" };
+            }
+            log("tool", `→ job ${job.id} ${job.status}`);
+            // The 8 KB wire cap is enforced on the ENCODED result and REFUSES, never
+            // truncates — and JSON escaping can sextuple a control character, which a
+            // program's output is free to be full of. So cap what the encoder will see,
+            // not what the string length claims.
+            const result = {
+              job: job.id,
+              status: job.status,
+              attempt: job.attempt,
+              printed: job.printed.slice(0, 2000),
+            };
+            while (JSON.stringify(result).length > 7000 && result.printed) {
+              result.printed = result.printed.slice(0, Math.floor(result.printed.length / 2));
+            }
+            return result;
+          },
+        },
+      };
+
+      $("call").onclick = async () => {
+        $("call").disabled = true;
+        say("starting…");
+
+        const res = await fetch("/api/call", { method: "POST" });
+        if (res.status === 429) {
+          const q = await res.json(); // a queue, not a failure
+          say(`all slots busy — position ${q.position ?? "?"}, retrying…`);
+          setTimeout(() => {
+            $("call").disabled = false;
+            $("call").click();
+          }, q.retryAfterMs ?? 3000);
+          return;
+        }
+        if (!res.ok) {
+          say(`could not start (${res.status})`);
+          $("call").disabled = false;
+          return;
+        }
+
+        // The body IS the grant, relayed byte-for-byte. Read the wire keys directly.
+        const grant = await res.json();
+        sessionId = grant.session_id; // held from HERE — the pagehide beacon needs it now
+        room = new Room();
+        room.on(RoomEvent.TrackSubscribed, (track) => {
+          if (track.kind === Track.Kind.Video) {
+            track.attach($("her"));
+            $("her").classList.add("on");
+            $("idle").style.display = "none";
+          }
+          if (track.kind === Track.Kind.Audio) document.body.append(track.attach());
+        });
+
+        room.on(RoomEvent.TranscriptionReceived, (segments, participant) => {
+          const mine = participant?.identity === room.localParticipant.identity;
+          for (const s of segments) {
+            if (!s.final) continue;
+            // A typed turn echoes back as a transcription of ourselves, already logged at
+            // the keystroke — `delete` is the membership test and the cleanup in one move.
+            if (mine && sentByUs.delete(s.text)) continue;
+            log(mine ? "you" : "her", s.text);
+          }
+        });
+
+        room.on(RoomEvent.Disconnected, () => {
+          say("call ended");
+          $("hang").disabled = $("say").disabled = true;
+          $("call").disabled = false;
+          room = null;
+        });
+
+        await room.connect(grant.livekit_url, grant.participant_token);
+        const mic = await startMic(room);
+        if (!mic.ok) say(`connected, but the microphone did not start. ${mic.why}`);
+
+        // Register once connected. `attachAvatarTools` waits for the agent by itself: joining
+        // the room and ARMING the registration method are not the same instant, and registering
+        // in that gap fails with "method not supported at destination" — the SAME error a
+        // session without the `client_tools` grant produces. It retries because one attempt
+        // cannot tell those apart, and guessing wrong sends you to the wrong layer entirely.
+        try {
+          const reg = await attachAvatarTools(room, TOOLS, {
+            timeoutMs: 15000,
+            onInvoke: (name, args) => log("tool", `${name}(${JSON.stringify(args)})`),
+          });
+          log("tools", `armed: ${reg.accepted.join(", ") || "(none)"}`);
+          // A rejected tool is silently uncallable, which reads exactly like her ignoring it.
+          for (const r of reg.rejected) log("tools", `rejected: ${r.name} — ${r.reason}`);
+        } catch (err) {
+          log("tools", `not armed: ${err.message}`);
+        }
+
+        say("connected — say what you want built");
+        $("hang").disabled = $("say").disabled = false;
+      };
+
+      $("say").addEventListener("keydown", async (e) => {
+        if (e.key !== "Enter" || !room || !$("say").value.trim()) return;
+        const text = $("say").value.trim();
+        $("say").value = "";
+        log("you", text);
+        sentByUs.add(text);
+        // A plain turn, nothing more. Whether it is a build is HER call now — the page
+        // stopped routing when the tools arrived.
+        await room.localParticipant.sendText(text, { topic: "lk.chat" });
+      });
+
+      $("run").onclick = async () => {
+        const result = await run();
+        const printed = [result.out, result.error].filter(Boolean).join("\n").trim();
+        $("out").style.display = "";
+        $("out").textContent = printed || "(no output)";
+        $("out").classList.toggle("bad", !result.ok);
+        // A manual rerun IS the build's latest outcome. Land it on the job record too, or
+        // check_program keeps reporting a result the panel no longer shows. Mid-build the
+        // record belongs to runJob, so only a settled job is updated.
+        if (job && (job.status === "done" || job.status === "failed")) {
+          job.status = result.ok ? "done" : "failed";
+          job.printed = printed;
+        }
+      };
+
+      $("hang").onclick = () => room?.disconnect();
+    </script>
+  </body>
+</html>

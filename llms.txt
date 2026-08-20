@@ -1,0 +1,77 @@
+# Realtime Avatar SDK
+
+> Server-side SDK for Realtime Avatar: a live character your users can talk to over voice or
+> video, who listens while she speaks — so she can be interrupted mid-sentence.
+
+Install: `npm install @theinfluencecompany/realtime-avatar` (+ `-proxy` for framework adapters)
+Runtime: Node >= 20. Zero dependencies. Server-only (it holds the API key).
+
+## Start here
+- [AGENTS.md](./AGENTS.md): the contract for using this correctly — the whole surface, plus
+  the rules that are expensive to break. Read this before writing code.
+- [libs/http-client/src/types.ts](./libs/http-client/src/types.ts): every public shape, one file.
+- [README.md](./README.md): human-facing overview and the 30-second example.
+
+## Packages
+- libs/http-client (@theinfluencecompany/realtime-avatar): the server client, zero dependencies
+- libs/proxy (@theinfluencecompany/realtime-avatar-proxy): Next.js / Hono / Express adapters
+  that keep the API key on the server
+- libs/tools (@theinfluencecompany/realtime-avatar-tools): browser tool plane — she calls your
+  functions mid-conversation; a call has 2.5s to answer
+- libs/browser (@theinfluencecompany/realtime-avatar-browser): browser audio — enableMicrophone()
+  returns WHY the mic did not start (the macOS system denial is not the browser denial, and the
+  address bar cannot fix it), attachRemoteAudio() plays her and surfaces a blocked autoplay.
+  No React, no livekit-client dependency
+- libs/contracts (@theinfluencecompany/realtime-avatar-contracts): runtime schemas for the wire
+- libs/mcp (@theinfluencecompany/realtime-avatar-mcp): MCP server so an agent can read avatars,
+  balance and the per-session bill directly. Read-only unless REALTIME_AVATAR_ALLOW_WRITES=1.
+
+Every call is full duplex — she listens the whole time she speaks, so she can be cut off
+mid-sentence. `mode` only picks the renderer: mode:"avatar" (the default) publishes video,
+mode:"voice" is cheaper audio-only. There is no `duplex` option.
+
+## Example apps (standalone, each with its own README)
+Quickstarts — the smallest correct integration per stack:
+- [apps/quickstart/nextjs-app-router](./apps/quickstart/nextjs-app-router): route handler +
+  call button
+- [apps/quickstart/python-fastapi](./apps/quickstart/python-fastapi): the same split in Python,
+  plus session-history (transcript + tool calls) signature verification
+- [apps/quickstart/canvas-tools](./apps/quickstart/canvas-tools): the client tool plane —
+  `clientTools: true` server-side, `attachAvatarTools` in the page, four tools closing over a
+  live canvas, and the return-now pattern for a tool slower than the 2.5s deadline. Note
+  `parameters` is plain JSON Schema; an `inputSchema` registers and then shows the model no
+  arguments
+Demos — larger showcases:
+- [apps/demo/coding-companion](./apps/demo/coding-companion): the client tool plane —
+  `clientTools: true` server-side, `attachAvatarTools` in the page. She starts builds via a
+  tool, a cheaper model writes the code — receipt + poll, because a build outlives the 2.5s
+  tool deadline
+- [apps/demo/livestream](./apps/demo/livestream): comments, gifts and hearts all ride one
+  `lk.chat` topic — she performs to a crowd she cannot see
+There is no archive folder: a superseded example is deleted, not parked, so everything under
+apps/ is current and safe to copy from.
+
+## The shape
+Your client asks your backend to start a call; your backend calls this SDK and relays the
+connection payload back; your client joins and renders her.
+
+## Non-obvious rules (each observed, not theorised)
+- The API key is server-only; the constructor throws in a browser runtime.
+- Relay `call.raw` byte-for-byte. Wrapping or adding a key makes the browser client reject it.
+- An avatar built from a still IMAGE renders a black video track while reporting `ready`.
+  Use `createAvatarFromVideo`.
+- `{ queued: true }` means all slots are busy. It is a queue, not an error.
+- Call `syncClips()` after ANY clip change, or a new clip silently does nothing.
+- Verify transcript webhooks over the RAW bytes; re-serializing breaks the signature.
+- Call policy (instructions, context, maxSeconds, video, voice) is decided by YOUR server.
+  Never populate it from a request body.
+- A slot is held from the grant, BEFORE the room exists. On `pagehide`, beacon a route that
+  calls `rta.endCall(sessionId)` — and only ever end ids your own server minted.
+
+## Not provided
+- Hosted tool execution — the platform never runs your tools. They run in YOUR page (the
+  client tool plane, `clientTools: true` + `attachAvatarTools`) against a 2.5s deadline.
+- A Python SDK — Python's half is plain HTTP; see the example.
+
+## More
+- Full documentation: https://realtimeavatar.ai/docs

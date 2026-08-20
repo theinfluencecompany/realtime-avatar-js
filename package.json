@@ -1,0 +1,23 @@
+{
+  "name": "realtime-avatar-sdk",
+  "private": true,
+  "description": "Realtime Avatar SDK — live voice and video characters you can interrupt.",
+  "license": "MIT",
+  "workspaces": [
+    "libs/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types libs/*/test/*.test.ts",
+    "build": "npm run build -w libs/contracts && npm run build -w libs/http-client && npm run build -w libs/tools && npm run build -w libs/browser && npm run build -w libs/proxy && npm run build -w libs/mcp && npm run build -w libs/client",
+    "check": "npm run typecheck && npm run build && npm test && npm run boundary",
+    "boundary": "node scripts/check-boundary.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.0"
+  }
+}
