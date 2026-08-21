@@ -174,4 +174,4 @@ export {
   type KnownBehaviorState,
   type SessionBehavior,
   type SessionClip,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";

@@ -20,7 +20,7 @@ import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 
 const PORT = Number(process.env.PORT ?? 4194);
 const MAX_SECONDS = Number(process.env.MAX_CALL_SECONDS ?? 420);
@@ -116,12 +116,12 @@ async function avatarId() {
  *
  * Both are resolved as PACKAGES, not as paths into this repo, so copying this folder out and
  * running `npm i` is all it takes. An app with a bundler has neither route — it imports
- * `@theinfluencecompany/realtime-avatar-tools` and `-browser` and lets the bundler do it. They
+ * `realtime-avatar-tools` and `-browser` and lets the bundler do it. They
  * are served raw here only so the example has no build step.
  */
 const require_ = createRequire(import.meta.url);
-const TOOLS_MODULE = require_.resolve("@theinfluencecompany/realtime-avatar-tools");
-const BROWSER_DIR = dirname(require_.resolve("@theinfluencecompany/realtime-avatar-browser"));
+const TOOLS_MODULE = require_.resolve("realtime-avatar-tools");
+const BROWSER_DIR = dirname(require_.resolve("realtime-avatar-browser"));
 
 /**
  * Calls THIS process started, so `/api/end` can only end its own. The route hears from any

@@ -26,7 +26,7 @@ import {
   lifecycleServerFrameSchema,
   type CapacityBusyResponse,
   type LLMProvider,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
 import { nextBehaviorSnapshot, type BehaviorSnapshot } from "./behavior-snapshot";
 
 // ---------------------------------------------------------------------------

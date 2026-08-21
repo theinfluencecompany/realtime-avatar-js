@@ -1,10 +1,10 @@
-# `@theinfluencecompany/realtime-avatar-browser`
+# `realtime-avatar-browser`
 
 Browser audio for a Realtime Avatar call: start the microphone, play the character, and say
 what went wrong when either does not happen.
 
 ```bash
-npm install @theinfluencecompany/realtime-avatar-browser
+npm install realtime-avatar-browser
 ```
 
 No React. No `livekit-client` dependency — both helpers are structural, so they work with
@@ -20,7 +20,7 @@ rejection becomes an unhandled promise nobody is watching. What gets reported is
 browser at all.
 
 ```ts
-import { enableMicrophone, attachRemoteAudio } from "@theinfluencecompany/realtime-avatar-browser";
+import { enableMicrophone, attachRemoteAudio } from "realtime-avatar-browser";
 
 const audio = attachRemoteAudio(room, {
   onPlaybackBlocked: (unblock) => {

@@ -1,5 +1,5 @@
-import type { CartesiaTtsModel, LLMSelection } from "@theinfluencecompany/realtime-avatar-contracts";
-export { LLM_PROVIDERS } from "@theinfluencecompany/realtime-avatar-contracts";
+import type { CartesiaTtsModel, LLMSelection } from "realtime-avatar-contracts";
+export { LLM_PROVIDERS } from "realtime-avatar-contracts";
 
 /**
  * Cartesia voice selector for avatar creation. The client just forwards it — no

@@ -1,5 +1,5 @@
 // The proxy package IS this file. Everything below is your policy, none of it is plumbing.
-import { createRealtimeAvatarRoute } from "@theinfluencecompany/realtime-avatar-proxy/nextjs";
+import { createRealtimeAvatarRoute } from "realtime-avatar-proxy/nextjs";
 
 export const { GET, POST } = createRealtimeAvatarRoute({
   apiKey: process.env.REALTIME_AVATAR_API_KEY!,   // never NEXT_PUBLIC_ prefixed

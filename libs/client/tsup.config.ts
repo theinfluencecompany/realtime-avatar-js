@@ -47,14 +47,14 @@ export default defineConfig({
   // otherwise treated as external, leaving a dangling
   // `import ... from "realtime-avatar-contracts"` in the published .d.ts).
   dts: {
-    resolve: [/^@theinfluencecompany\/realtime-avatar-contracts$/],
+    resolve: [/^realtime-avatar-contracts$/],
   },
   sourcemap: true,
   clean: true,
   splitting: false,
   treeshake: true,
   // Bundle the internal contracts package; keep real npm packages external.
-  noExternal: ["@theinfluencecompany/realtime-avatar-contracts"],
+  noExternal: ["realtime-avatar-contracts"],
   external: [
     "react",
     "react-dom",

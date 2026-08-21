@@ -6,7 +6,7 @@
     "declaration": true,
     "rootDir": "src",
     "paths": {
-      "@theinfluencecompany/realtime-avatar": [
+      "realtime-avatar": [
         "../client/src/index.ts"
       ]
     },

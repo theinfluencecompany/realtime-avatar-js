@@ -16,13 +16,13 @@ body:
     attributes:
       label: Package
       options:
-        - "@theinfluencecompany/realtime-avatar (server client)"
-        - "@theinfluencecompany/realtime-avatar-react"
-        - "@theinfluencecompany/realtime-avatar-proxy"
-        - "@theinfluencecompany/realtime-avatar-browser"
-        - "@theinfluencecompany/realtime-avatar-tools"
-        - "@theinfluencecompany/realtime-avatar-contracts"
-        - "@theinfluencecompany/realtime-avatar-mcp"
+        - "realtime-avatar (server client)"
+        - "realtime-avatar-react"
+        - "realtime-avatar-proxy"
+        - "realtime-avatar-browser"
+        - "realtime-avatar-tools"
+        - "realtime-avatar-contracts"
+        - "realtime-avatar-mcp"
         - "An example app under apps/"
         - "Not sure"
     validations:

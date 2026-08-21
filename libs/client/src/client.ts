@@ -13,8 +13,8 @@ import {
 import type {
   CapacityBusyResponse,
   LiveKitSessionReleaseReason,
-} from "@theinfluencecompany/realtime-avatar-contracts";
-import type { LLMProvider } from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
+import type { LLMProvider } from "realtime-avatar-contracts";
 import {
   listConfiguredLLMProviders,
   readLLMProvider,

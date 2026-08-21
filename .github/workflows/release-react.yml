@@ -1,6 +1,6 @@
 name: Release realtime-avatar-react
 
-# Publishes @theinfluencecompany/realtime-avatar-react (libs/client) to npm.
+# Publishes realtime-avatar-react (libs/client) to npm.
 #
 # The contracts package is BUNDLED into the tarball (tsup noExternal), so the published
 # package carries no workspace:* dep and installs standalone — no monorepo needed at the
@@ -54,7 +54,8 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-          scope: "@theinfluencecompany"
+          # No `scope:` — these packages are unscoped. setup-node's scope only writes a
+          # `@scope:registry=` line into .npmrc, which would bind a scope nothing uses.
       # Trusted publishing needs npm >= 11.5.1; Node 22 still bundles npm 10.
       - run: npm install -g npm@latest
       - run: npm install

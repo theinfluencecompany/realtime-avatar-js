@@ -1,6 +1,6 @@
 {
-  "name": "@theinfluencecompany/realtime-avatar-proxy",
-  "version": "0.1.0",
+  "name": "realtime-avatar-proxy",
+  "version": "0.2.1",
   "description": "Framework adapters that keep your Realtime Avatar API key on the server.",
   "license": "MIT",
   "author": "The Influence Company",
@@ -63,6 +63,6 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@theinfluencecompany/realtime-avatar": "0.1.0"
+    "realtime-avatar": "0.2.1"
   }
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer, type CreateServerOptions } from "../src/server.ts";
+import { createServer, MCP_VERSION, type CreateServerOptions } from "../src/server.ts";
 
 const AVATARS = {
   data: [
@@ -165,4 +165,11 @@ test("upload_asset infers kind from the extension, and asks when it cannot", asy
     await rm(mp4, { force: true });
     await rm(odd, { force: true });
   }
+});
+
+test("MCP_VERSION tracks package.json, so the server identity cannot go stale", async () => {
+  const pkg = JSON.parse(
+    await (await import("node:fs/promises")).readFile(
+      new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(MCP_VERSION, pkg.version);
 });

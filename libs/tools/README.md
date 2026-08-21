@@ -1,9 +1,9 @@
-# @theinfluencecompany/realtime-avatar-tools
+# realtime-avatar-tools
 
 Your page's own functions, callable by the avatar. **No React required.**
 
 ```ts
-import { attachAvatarTools } from "@theinfluencecompany/realtime-avatar-tools";
+import { attachAvatarTools } from "realtime-avatar-tools";
 
 await attachAvatarTools(room, {
   check_order: {

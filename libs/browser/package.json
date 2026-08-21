@@ -1,6 +1,6 @@
 {
-  "name": "@theinfluencecompany/realtime-avatar-browser",
-  "version": "0.1.0",
+  "name": "realtime-avatar-browser",
+  "version": "0.2.1",
   "description": "Browser audio for Realtime Avatar — start the microphone, play the character, and say what went wrong. No React, no livekit-client dependency.",
   "license": "MIT",
   "author": "The Influence Company",

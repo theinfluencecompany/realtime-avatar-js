@@ -1,4 +1,4 @@
-# @theinfluencecompany/realtime-avatar-proxy
+# realtime-avatar-proxy
 
 Framework adapters that keep your Realtime Avatar API key on the server.
 
@@ -7,14 +7,14 @@ So the browser talks to your app, and your app talks to us. This package is that
 the two hooks that matter already in the right places.
 
 ```bash
-npm install @theinfluencecompany/realtime-avatar-proxy
+npm install realtime-avatar-proxy
 ```
 
 ## Next.js (App Router)
 
 ```ts
 // app/api/realtime-avatar/[...path]/route.ts
-import { createRealtimeAvatarRoute } from "@theinfluencecompany/realtime-avatar-proxy/nextjs";
+import { createRealtimeAvatarRoute } from "realtime-avatar-proxy/nextjs";
 
 export const { GET, POST } = createRealtimeAvatarRoute({
   apiKey: process.env.REALTIME_AVATAR_API_KEY!,   // never NEXT_PUBLIC_ prefixed
@@ -37,7 +37,7 @@ export const { GET, POST } = createRealtimeAvatarRoute({
 ## Hono, Workers, Bun, Deno
 
 ```ts
-import { realtimeAvatarHono } from "@theinfluencecompany/realtime-avatar-proxy/hono";
+import { realtimeAvatarHono } from "realtime-avatar-proxy/hono";
 
 app.all("/api/realtime-avatar/*", realtimeAvatarHono({
   apiKey: () => env.REALTIME_AVATAR_API_KEY,      // a factory: no process.env on Workers
@@ -49,7 +49,7 @@ app.all("/api/realtime-avatar/*", realtimeAvatarHono({
 
 ```ts
 import express from "express";
-import { realtimeAvatarExpress } from "@theinfluencecompany/realtime-avatar-proxy/express";
+import { realtimeAvatarExpress } from "realtime-avatar-proxy/express";
 
 app.use("/api/realtime-avatar", express.json(),
   realtimeAvatarExpress({ apiKey: process.env.REALTIME_AVATAR_API_KEY!, session }));

@@ -14,10 +14,10 @@
 import type {
   ApproachingEndReason,
   SessionEndReasonLabel,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
 import type { SessionEndReason } from "./session-lifecycle";
 
-export type { ApproachingEndReason } from "@theinfluencecompany/realtime-avatar-contracts";
+export type { ApproachingEndReason } from "realtime-avatar-contracts";
 
 /**
  * The terminal, LABELED end reason surfaced to the app via `onEnded`. This is the

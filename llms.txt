@@ -3,7 +3,7 @@
 > Server-side SDK for Realtime Avatar: a live character your users can talk to over voice or
 > video, who listens while she speaks — so she can be interrupted mid-sentence.
 
-Install: `npm install @theinfluencecompany/realtime-avatar` (+ `-proxy` for framework adapters)
+Install: `npm install realtime-avatar` (+ `-proxy` for framework adapters)
 Runtime: Node >= 20. Zero dependencies. Server-only (it holds the API key).
 
 ## Start here
@@ -13,17 +13,17 @@ Runtime: Node >= 20. Zero dependencies. Server-only (it holds the API key).
 - [README.md](./README.md): human-facing overview and the 30-second example.
 
 ## Packages
-- libs/http-client (@theinfluencecompany/realtime-avatar): the server client, zero dependencies
-- libs/proxy (@theinfluencecompany/realtime-avatar-proxy): Next.js / Hono / Express adapters
+- libs/http-client (realtime-avatar): the server client, zero dependencies
+- libs/proxy (realtime-avatar-proxy): Next.js / Hono / Express adapters
   that keep the API key on the server
-- libs/tools (@theinfluencecompany/realtime-avatar-tools): browser tool plane — she calls your
+- libs/tools (realtime-avatar-tools): browser tool plane — she calls your
   functions mid-conversation; a call has 2.5s to answer
-- libs/browser (@theinfluencecompany/realtime-avatar-browser): browser audio — enableMicrophone()
+- libs/browser (realtime-avatar-browser): browser audio — enableMicrophone()
   returns WHY the mic did not start (the macOS system denial is not the browser denial, and the
   address bar cannot fix it), attachRemoteAudio() plays her and surfaces a blocked autoplay.
   No React, no livekit-client dependency
-- libs/contracts (@theinfluencecompany/realtime-avatar-contracts): runtime schemas for the wire
-- libs/mcp (@theinfluencecompany/realtime-avatar-mcp): MCP server so an agent can read avatars,
+- libs/contracts (realtime-avatar-contracts): runtime schemas for the wire
+- libs/mcp (realtime-avatar-mcp): MCP server so an agent can read avatars,
   balance and the per-session bill directly. Read-only unless REALTIME_AVATAR_ALLOW_WRITES=1.
 
 Every call is full duplex — she listens the whole time she speaks, so she can be cut off

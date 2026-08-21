@@ -1,11 +1,11 @@
-# @theinfluencecompany/realtime-avatar-react
+# realtime-avatar-react
 
 **Not released.** This package is extracted but not yet publishable — it has no `exports`,
 `main` or `types` in its `package.json`, and it is not part of the workspace build.
 
 The React facade for joining a call from the browser: `AvatarCall` and `useAvatarCall`. You
 hand it the connection payload your server got from
-[`@theinfluencecompany/realtime-avatar`](../http-client), and it renders her.
+[`realtime-avatar`](../http-client), and it renders her.
 
 Until this ships, join a call with `livekit-client` directly — see
 [`apps/demo/coding-companion`](../../apps/demo/coding-companion) for the whole path in one

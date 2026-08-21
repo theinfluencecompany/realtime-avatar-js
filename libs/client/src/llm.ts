@@ -1,7 +1,7 @@
 import {
   LLM_PROVIDERS,
   type LLMProvider,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
 
 export type SecretSource = string | (() => string | null | undefined | Promise<string | null | undefined>);
 

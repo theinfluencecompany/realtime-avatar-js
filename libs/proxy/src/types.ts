@@ -1,4 +1,4 @@
-import type { CallPolicy, CallMode } from "@theinfluencecompany/realtime-avatar";
+import type { CallPolicy, CallMode } from "realtime-avatar";
 
 /** The three things a caller can ask the proxy to do. Gate on these, not on URLs. */
 export type ProxyOperation = "connect" | "avatars" | "credits";

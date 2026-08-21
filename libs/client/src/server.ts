@@ -3,7 +3,7 @@
 // browser or handed to API consumers. They are deliberately kept out of the
 // default client entry so the published SDK exposes no key-verification logic.
 //
-//   import { hashRealtimeAvatarApiKey } from "@theinfluencecompany/realtime-avatar/server";
+//   import { hashRealtimeAvatarApiKey } from "realtime-avatar/server";
 export {
   RealtimeAvatarClient,
   DEFAULT_BROWSER_PROXY_URL,

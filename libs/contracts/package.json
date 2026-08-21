@@ -1,6 +1,6 @@
 {
-  "name": "@theinfluencecompany/realtime-avatar-contracts",
-  "version": "0.1.0",
+  "name": "realtime-avatar-contracts",
+  "version": "0.2.1",
   "description": "Wire schemas for the public Realtime Avatar API.",
   "license": "MIT",
   "author": "The Influence Company",

@@ -6,7 +6,7 @@
  *     "mcpServers": {
  *       "realtime-avatar": {
  *         "command": "npx",
- *         "args": ["-y", "@theinfluencecompany/realtime-avatar-mcp"],
+ *         "args": ["-y", "realtime-avatar-mcp"],
  *         "env": { "REALTIME_AVATAR_API_KEY": "tic_test_…" }
  *       }
  *     }

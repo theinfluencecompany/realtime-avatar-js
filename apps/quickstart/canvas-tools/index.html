@@ -80,7 +80,7 @@
     <script type="module">
       import { Room, RoomEvent, Track } from "https://esm.sh/livekit-client@2.19.2";
       // The non-React tool plane, served by this app's own server from the installed package.
-      // In a bundled app this is a plain import of "@theinfluencecompany/realtime-avatar-tools".
+      // In a bundled app this is a plain import of "realtime-avatar-tools".
       import { attachAvatarTools, TOOL_DEADLINE_MS } from "/sdk/tools.js";
 
       const $ = (id) => document.getElementById(id);
@@ -92,7 +92,7 @@
         $("log").scrollTop = $("log").scrollHeight;
       };
 
-      // Why the microphone did not start. Published as @theinfluencecompany/realtime-avatar-browser;
+      // Why the microphone did not start. Published as realtime-avatar-browser;
       // inlined so this example stays standalone. It returns a reason instead of throwing because
       // "the mic won't start" is one sentence covering six causes with six different fixes — and
       // one of them is not in the browser at all. Left unguarded, the rejection is an unhandled

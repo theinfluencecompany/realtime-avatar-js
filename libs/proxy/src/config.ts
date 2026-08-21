@@ -1,4 +1,4 @@
-import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 import type { ProxyConfig, ProxyOperation } from "./types.ts";
 
 const json = (body: unknown, status = 200): Response =>

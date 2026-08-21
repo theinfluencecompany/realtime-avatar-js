@@ -12,7 +12,7 @@
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 
 const PORT = Number(process.env.PORT ?? 4198);
 const MAX_SECONDS = Number(process.env.MAX_CALL_SECONDS ?? 300);

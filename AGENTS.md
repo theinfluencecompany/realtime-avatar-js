@@ -30,7 +30,7 @@ Two facts that shape every integration:
 ## The 30-second version
 
 ```ts
-import { RealtimeAvatar, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, isQueued } from "realtime-avatar";
 
 const rta = new RealtimeAvatar({ apiKey: process.env.REALTIME_AVATAR_API_KEY! });
 
@@ -131,7 +131,7 @@ mid-`await`, and the rejection becomes an unhandled promise nobody is watching. 
 reported back is one sentence, "the mic won't start", covering causes with different fixes.
 
 ```ts
-import { enableMicrophone, attachRemoteAudio } from "@theinfluencecompany/realtime-avatar-browser";
+import { enableMicrophone, attachRemoteAudio } from "realtime-avatar-browser";
 
 const audio = attachRemoteAudio(room, {                 // BEFORE connect — see below
   onPlaybackBlocked: (unblock) => { btn.hidden = unblock === null; btn.onclick = () => unblock?.(); },
@@ -380,7 +380,7 @@ Say so plainly rather than working around it:
 ## Errors worth branching on
 
 ```ts
-import { RealtimeAvatarHttpError } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatarHttpError } from "realtime-avatar";
 
 try {
   await rta.startCall({ avatarId, instructions, maxSeconds });
@@ -413,13 +413,13 @@ npm run check          # typecheck + tests + build, all of it
 Layout follows the fal-js convention — libraries in `libs/`, runnable demos in `apps/`:
 
 ```
-libs/http-client  @theinfluencecompany/realtime-avatar            the server client, zero deps
-libs/proxy        @theinfluencecompany/realtime-avatar-proxy      Next.js / Hono / Express adapters
-libs/tools        @theinfluencecompany/realtime-avatar-tools      browser tool plane
-libs/browser      @theinfluencecompany/realtime-avatar-browser    browser audio: mic + playback
-libs/contracts    @theinfluencecompany/realtime-avatar-contracts  runtime schemas for the wire
-libs/mcp          @theinfluencecompany/realtime-avatar-mcp        MCP server (not published)
-libs/client       @theinfluencecompany/realtime-avatar-react      React facade (published)
+libs/http-client  realtime-avatar            the server client, zero deps
+libs/proxy        realtime-avatar-proxy      Next.js / Hono / Express adapters
+libs/tools        realtime-avatar-tools      browser tool plane
+libs/browser      realtime-avatar-browser    browser audio: mic + playback
+libs/contracts    realtime-avatar-contracts  runtime schemas for the wire
+libs/mcp          realtime-avatar-mcp        MCP server (not published)
+libs/client       realtime-avatar-react      React facade (published)
 apps/quickstart/* the smallest correct integration per stack
 apps/demo/*       showcases — larger, read these second
 ```

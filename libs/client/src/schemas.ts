@@ -8,4 +8,4 @@ export {
   llmProviderSchema,
   llmSelectionSchema,
   renderBackendSchema,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";

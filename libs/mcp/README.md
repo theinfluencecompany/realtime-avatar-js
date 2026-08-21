@@ -1,4 +1,4 @@
-# @theinfluencecompany/realtime-avatar-mcp
+# realtime-avatar-mcp
 
 **Not published yet** — the package is marked `private: true`, so `npm publish` skips it rather than relying on nobody running the command. Build it and point your agent at the local path.
 

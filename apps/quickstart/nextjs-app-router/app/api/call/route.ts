@@ -1,4 +1,4 @@
-import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 
 const rta = new RealtimeAvatar({ apiKey: process.env.REALTIME_AVATAR_API_KEY! });
 

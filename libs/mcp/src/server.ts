@@ -3,7 +3,15 @@ import { stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { RealtimeAvatar, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, isQueued } from "realtime-avatar";
+
+/**
+ * Mirrors this package's `version`. It reaches the wire twice — as the MCP server's own
+ * identity, and inside the `User-Agent` — so a stale value misattributes real traffic.
+ * `test/server.test.ts` asserts the two stay equal; the equivalent constant in
+ * `realtime-avatar` had that guard and this one did not, which is how it drifted.
+ */
+export const MCP_VERSION = "0.2.1";
 
 /**
  * The Realtime Avatar MCP server.
@@ -68,12 +76,12 @@ export function createServer(options: CreateServerOptions): McpServer {
     apiKey: options.apiKey,
     baseUrl: options.baseUrl,
     fetch: options.fetch,
-    userAgent: "realtime-avatar-mcp/0.1.0",
+    userAgent: `realtime-avatar-mcp/${MCP_VERSION}`,
   });
   const isLiveKey = options.apiKey.startsWith("tic_live_");
 
   const server = new McpServer(
-    { name: "realtime-avatar", version: "0.1.0" },
+    { name: "realtime-avatar-mcp", version: MCP_VERSION },
     {
       instructions:
         "Realtime Avatar: a live character your users can talk to. Start calls from your " +

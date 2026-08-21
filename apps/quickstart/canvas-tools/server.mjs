@@ -17,7 +17,7 @@
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 
 const PORT = Number(process.env.PORT ?? 4193);
 const MAX_SECONDS = Number(process.env.MAX_CALL_SECONDS ?? 300);
@@ -81,12 +81,12 @@ async function avatarId() {
  * Ship the tool plane to the page.
  *
  * Resolved as a PACKAGE, not as a path into this repo, so copying this folder out and running
- * `npm i @theinfluencecompany/realtime-avatar-tools` is all it takes. In an app with a bundler
+ * `npm i realtime-avatar-tools` is all it takes. In an app with a bundler
  * this route does not exist at all — `import { attachAvatarTools } from
- * "@theinfluencecompany/realtime-avatar-tools"` and let the bundler do it. It is served raw
+ * "realtime-avatar-tools"` and let the bundler do it. It is served raw
  * here only so the example has no build step.
  */
-const TOOLS_MODULE = createRequire(import.meta.url).resolve("@theinfluencecompany/realtime-avatar-tools");
+const TOOLS_MODULE = createRequire(import.meta.url).resolve("realtime-avatar-tools");
 
 /**
  * Calls THIS process started, so `/api/end` can only end its own. The route hears from any

@@ -17,7 +17,7 @@ import type {
 const DEFAULT_BASE_URL = "https://realtimeavatar.ai/api/v1";
 
 /** Must equal the version in package.json — a test asserts it, so drift fails CI. */
-export const SDK_VERSION = "0.1.0";
+export const SDK_VERSION = "0.2.1";
 
 /**
  * Transient upstream failures. **429 is deliberately absent.**

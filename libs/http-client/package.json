@@ -1,6 +1,6 @@
 {
-  "name": "@theinfluencecompany/realtime-avatar",
-  "version": "0.1.0",
+  "name": "realtime-avatar",
+  "version": "0.2.1",
   "description": "Server-side client for Realtime Avatar — live voice and video characters you can interrupt.",
   "license": "MIT",
   "author": "The Influence Company",

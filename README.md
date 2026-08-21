@@ -7,7 +7,7 @@
 Your footage. Your voice. Your persona. Talking back in real time — and stopping
 mid-sentence the moment someone cuts in, the way a person stops.
 
-[![npm](https://img.shields.io/npm/v/@theinfluencecompany/realtime-avatar?color=1a7f37&label=npm)](https://www.npmjs.com/package/@theinfluencecompany/realtime-avatar)
+[![npm](https://img.shields.io/npm/v/realtime-avatar?color=1a7f37&label=npm)](https://www.npmjs.com/package/realtime-avatar)
 [![CI](https://github.com/theinfluencecompany/realtime-avatar-js/actions/workflows/ci.yml/badge.svg)](https://github.com/theinfluencecompany/realtime-avatar-js/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Docs](https://img.shields.io/badge/docs-realtimeavatar.ai-6f42c1)](https://realtimeavatar.ai/docs)
@@ -22,13 +22,13 @@ mid-sentence the moment someone cuts in, the way a person stops.
 ## Quickstart
 
 ```bash
-npm install @theinfluencecompany/realtime-avatar @theinfluencecompany/realtime-avatar-proxy
+npm install realtime-avatar realtime-avatar-proxy
 ```
 
 Start the call on your **server**. Your key never touches a browser.
 
 ```ts
-import { RealtimeAvatar, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, isQueued } from "realtime-avatar";
 
 const rta = new RealtimeAvatar({ apiKey: process.env.REALTIME_AVATAR_API_KEY! });
 
@@ -45,7 +45,7 @@ return call.raw;            // relay to the browser, byte-for-byte
 Join it from your **client**.
 
 ```tsx
-import { AvatarCall } from "@theinfluencecompany/realtime-avatar-react";
+import { AvatarCall } from "realtime-avatar-react";
 
 <AvatarCall grant={grant} onEnd={() => router.push("/")} />;
 ```
@@ -99,7 +99,7 @@ file, plus the twelve rules that are expensive to learn the hard way.
 
 ```
 "Add a voice call to my Next.js app using the Realtime Avatar SDK.
- Read AGENTS.md in node_modules/@theinfluencecompany/realtime-avatar first."
+ Read AGENTS.md in node_modules/realtime-avatar first."
 ```
 
 `CLAUDE.md` symlinks to it, so Claude Code picks it up with no prompting. Codex, Cursor and
@@ -113,13 +113,13 @@ live instead of reading about them.
 
 | Package | Install | What it does |
 | --- | --- | --- |
-| [`libs/http-client`](./libs/http-client) | `@theinfluencecompany/realtime-avatar` | The server client. **Zero dependencies.** |
-| [`libs/react`](./libs/client) | `@theinfluencecompany/realtime-avatar-react` | React + React Native. `<AvatarCall>` and `useAvatarCall`. |
-| [`libs/proxy`](./libs/proxy) | `@theinfluencecompany/realtime-avatar-proxy` | Next.js / Hono / Express adapters that keep your key server-side |
-| [`libs/browser`](./libs/browser) | `@theinfluencecompany/realtime-avatar-browser` | Mic and playback, with the six failure modes turned into values |
-| [`libs/tools`](./libs/tools) | `@theinfluencecompany/realtime-avatar-tools` | The browser tool plane — your functions, called mid-conversation |
-| [`libs/contracts`](./libs/contracts) | `@theinfluencecompany/realtime-avatar-contracts` | Runtime schemas for the wire, if you're building your own proxy |
-| [`libs/mcp`](./libs/mcp) | `@theinfluencecompany/realtime-avatar-mcp` | MCP server for coding agents |
+| [`libs/http-client`](./libs/http-client) | `realtime-avatar` | The server client. **Zero dependencies.** |
+| [`libs/react`](./libs/client) | `realtime-avatar-react` | React + React Native. `<AvatarCall>` and `useAvatarCall`. |
+| [`libs/proxy`](./libs/proxy) | `realtime-avatar-proxy` | Next.js / Hono / Express adapters that keep your key server-side |
+| [`libs/browser`](./libs/browser) | `realtime-avatar-browser` | Mic and playback, with the six failure modes turned into values |
+| [`libs/tools`](./libs/tools) | `realtime-avatar-tools` | The browser tool plane — your functions, called mid-conversation |
+| [`libs/contracts`](./libs/contracts) | `realtime-avatar-contracts` | Runtime schemas for the wire, if you're building your own proxy |
+| [`libs/mcp`](./libs/mcp) | `realtime-avatar-mcp` | MCP server for coding agents |
 
 ---
 

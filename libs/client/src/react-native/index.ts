@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// @theinfluencecompany/realtime-avatar/react-native — the React Native client.
+// realtime-avatar/react-native — the React Native client.
 //
 // The session brain is SHARED with the web entry, not forked: the grant hook,
 // the session lifecycle state machine, the realtime-session facade, the grace
@@ -11,7 +11,7 @@
 //
 // App setup (once, before any LiveKit code runs):
 //
-//   import { registerGlobals } from "@theinfluencecompany/realtime-avatar/react-native";
+//   import { registerGlobals } from "realtime-avatar/react-native";
 //   registerGlobals();
 //
 // Peer deps the app installs: @livekit/react-native, @livekit/react-native-webrtc.
@@ -186,7 +186,7 @@ export {
   type KnownBehaviorState,
   type SessionBehavior,
   type SessionClip,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
 
 // Mic single-flight lease — the cross-room getUserMedia guard. Both halves are
 // RN-safe but were not re-exported on native before; an Android call path needs

@@ -13,4 +13,4 @@ export type {
   SourceVideoCacheSettings,
   VoiceSpec,
   VoiceSpecInput,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";

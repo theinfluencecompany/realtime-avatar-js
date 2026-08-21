@@ -1,14 +1,14 @@
-# @theinfluencecompany/realtime-avatar
+# realtime-avatar
 
 A live character your users can talk to — voice, or voice and video. She listens while she
 speaks, so you can interrupt her mid-sentence and she stops, the way a person stops.
 
 ```bash
-npm install @theinfluencecompany/realtime-avatar
+npm install realtime-avatar
 ```
 
 ```ts
-import { RealtimeAvatar, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, isQueued } from "realtime-avatar";
 
 const rta = new RealtimeAvatar({ apiKey: process.env.REALTIME_AVATAR_API_KEY! });
 

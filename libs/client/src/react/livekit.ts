@@ -29,7 +29,7 @@ import type {
   CapacityBusyResponse,
   LiveKitSessionReleaseReason,
   LLMProvider,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
 export type { SendTextOptions } from "livekit-client";
 // Raw transport primitives, surfaced through the SDK so adopters (e.g. the admin
 // Benchmark console that joins N rooms imperatively to measure fps) never take a

@@ -8,7 +8,7 @@ import {
   RTA_TURN_INSTRUCTIONS_ATTR,
   type LLMProvider,
   type SessionEndReasonLabel,
-} from "@theinfluencecompany/realtime-avatar-contracts";
+} from "realtime-avatar-contracts";
 import {
   useSessionLifecycle,
   DEFAULT_TURN_TIMEOUT_SECONDS,

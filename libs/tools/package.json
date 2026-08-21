@@ -1,6 +1,6 @@
 {
-  "name": "@theinfluencecompany/realtime-avatar-tools",
-  "version": "0.1.0",
+  "name": "realtime-avatar-tools",
+  "version": "0.2.1",
   "description": "Browser tool plane for Realtime Avatar — your page's functions, callable by the avatar. No React required.",
   "license": "MIT",
   "author": "The Influence Company",

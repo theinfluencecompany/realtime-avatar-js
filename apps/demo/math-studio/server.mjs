@@ -26,7 +26,7 @@ import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "@theinfluencecompany/realtime-avatar";
+import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 
 const PORT = Number(process.env.PORT ?? 4199);
 const MAX_SECONDS = Number(process.env.MAX_CALL_SECONDS ?? 420);
@@ -401,10 +401,10 @@ const STRANDS = new Set(["geometry", "trigonometry", "signals"]);
 
 /** Served raw so this example needs no build step. A real app imports the package and bundles it. */
 const require_ = createRequire(import.meta.url);
-const TOOLS_MODULE = require_.resolve("@theinfluencecompany/realtime-avatar-tools");
+const TOOLS_MODULE = require_.resolve("realtime-avatar-tools");
 /* The browser package is several files that import each other by relative path, so the folder is
    what gets served, not one file — the page imports the entry and the rest follows. */
-const BROWSER_DIR = dirname(require_.resolve("@theinfluencecompany/realtime-avatar-browser"));
+const BROWSER_DIR = dirname(require_.resolve("realtime-avatar-browser"));
 
 /** Calls THIS process minted, so /api/end can only end its own. */
 const started = new Map();
