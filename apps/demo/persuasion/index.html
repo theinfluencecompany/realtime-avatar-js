@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Change her mind</title>
+    <style>
+      :root { color-scheme: dark }
+      * { box-sizing: border-box }
+      body { margin: 0; min-height: 100svh; background: #140d16; color: #f6ecf6;
+        font: 15px/1.55 ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column;
+        align-items: center; gap: 12px; padding: 24px 16px 40px }
+      h1 { font-size: 20px; margin: 0; font-weight: 700 }
+      .sub { color: #a596a8; font-size: 13px; margin: -6px 0 4px; max-width: 560px; text-align: center }
+      .claim { width: min(560px, 94vw); text-align: center; font-size: 19px; font-weight: 600;
+        border: 1px dashed #ff5fa25c; border-radius: 12px; padding: 12px 14px; color: #ffb3d2 }
+      .stage { width: min(380px, 92vw); aspect-ratio: 3/4; background: #0b070c; overflow: hidden;
+        border: 1px solid #ffffff1c; border-radius: 14px; display: grid; place-items: center; position: relative }
+      video { width: 100%; height: 100%; object-fit: cover; display: none }
+      video.on { display: block }
+      .idle { color: #6d5f70; font-size: 13px }
+      .status { position: absolute; inset: auto 0 0 0; padding: 8px 11px; font-size: 12.5px;
+        background: linear-gradient(transparent, #000000cc); color: #e4d6e4 }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: min(560px, 94vw) }
+      input, button { font: inherit; border: 1px solid #ffffff24; background: #211826; color: #f6ecf6;
+        border-radius: 999px; padding: 9px 15px }
+      input { flex: 1; min-width: 240px; border-radius: 12px }
+      button { cursor: pointer }
+      button.primary { background: #ff5fa2; border-color: transparent; color: #210914; font-weight: 700 }
+      button:disabled { opacity: .45; cursor: default }
+      #log { width: min(560px, 94vw); border: 1px solid #ffffff14; border-radius: 12px; padding: 10px 12px;
+        background: #1a121c; font: 12.5px/1.55 ui-monospace, monospace; max-height: 220px; overflow: auto }
+      #log b { color: #ff8ec2 }
+      #won { display: none; width: min(560px, 94vw); text-align: center; padding: 18px;
+        border-radius: 14px; background: linear-gradient(140deg, #ff5fa2, #c084fc); color: #1b0a15; font-weight: 700 }
+      #won.on { display: block }
+    </style>
+  </head>
+  <body>
+    <h1>Change her mind</h1>
+    <p class="sub">
+      She holds one position and will not be moved by volume, repetition or insistence. Only a
+      genuinely new argument makes her concede.
+    </p>
+
+    <div class="claim" id="claim">press Start and she'll pick her hill</div>
+    <div class="stage">
+      <video id="her" autoplay playsinline></video>
+      <span class="idle" id="idle">not connected</span>
+      <div class="status" id="status">press Start</div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="start">Start</button>
+      <button id="hang" disabled>Give up</button>
+    </div>
+    <div class="row"><input id="say" placeholder="argue out loud, or type here…" disabled /></div>
+    <div id="log"></div>
+    <div id="won">You changed her mind.</div>
+
+    <script type="module">
+      import { Room, RoomEvent, Track } from "https://esm.sh/livekit-client@2.19.2";
+      // The non-React tool plane, served by this app's own server from the installed package.
+      // In a bundled app this is a plain import of "realtime-avatar-tools".
+      import { attachAvatarTools } from "/sdk/tools.js";
+
+      const $ = (id) => document.getElementById(id);
+      const say = (t) => ($("status").textContent = t);
+
+      // Why the microphone did not start. Published as realtime-avatar-browser;
+      // inlined so this example stays standalone. It returns a reason instead of throwing because
+      // "the mic won't start" is one sentence covering six causes with six different fixes — and
+      // one of them is not in the browser at all. Left unguarded (as this was), the rejection is an
+      // unhandled promise nobody watches and the page simply stops mid-connect.
+      async function startMic(room) {
+        if (!navigator.mediaDevices) return { ok: false, why: "This page is not a secure context. Use https, or http://localhost — a LAN address will not do." };
+        try {
+          // Per spec getUserMedia may neither resolve nor reject if the prompt is ignored.
+          const noAnswer = new Promise((r) => setTimeout(() => r("no-answer"), 15000));
+          const started = room.localParticipant.setMicrophoneEnabled(true).then(() => "ok");
+          if (await Promise.race([started, noAnswer]) === "no-answer") return { ok: false, why: "The microphone prompt was not answered — look for it in the address bar." };
+          return { ok: true };
+        } catch (err) {
+          const message = err?.message ?? String(err);
+          if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+            // Chromium reports a macOS system denial as NotAllowedError too, and THAT one the
+            // address bar cannot fix — so the two must never share a message.
+            return /by system|system permission/i.test(message)
+              ? { ok: false, why: "macOS is blocking the browser itself: System Settings > Privacy & Security > Microphone, then RESTART the browser." }
+              : { ok: false, why: "This site is blocked from the microphone — allow it from the address-bar icon and reload." };
+          }
+          if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") return { ok: false, why: "No microphone is available." };
+          if (err?.name === "NotReadableError" || err?.name === "TrackStartError") return { ok: false, why: "Another app or tab is holding the microphone." };
+          return { ok: false, why: message };
+        }
+      }
+      const log = (who, text) => {
+        const d = document.createElement("div");
+        d.innerHTML = `<b>${who}</b> ${text.replace(/[<&]/g, (c) => (c === "<" ? "&lt;" : "&amp;"))}`;
+        $("log").append(d);
+        $("log").scrollTop = $("log").scrollHeight;
+      };
+
+      let room = null;
+      let sessionId = null;
+      /** Typed turns echo back as transcriptions of ourselves. We logged them at the
+       *  keystroke, so the echo is skipped — otherwise every typed turn appears twice. */
+      const sentByUs = new Set();
+
+      // The slot is held from the moment the grant lands — BEFORE the room exists. A tab
+      // closed in that gap tells no one. `pagehide` + sendBeacon is the one goodbye that
+      // outlives a closing page; the server ends the call and the slot frees now instead of
+      // at the join timeout. Ending is idempotent, so firing after a normal hang-up is fine.
+      addEventListener("pagehide", () => {
+        if (sessionId) navigator.sendBeacon("/api/end", JSON.stringify({ session_id: sessionId }));
+      });
+
+      /**
+       * The win.
+       *
+       * SHE decides she has lost, and signals it by calling this — the win state never flips
+       * from her words. Her speech only reaches this page through speech recognition, which
+       * re-spells contractions and drops punctuation; a tool call arrives exactly once,
+       * exactly as sent. The returned string grounds her next turn: concede first, then
+       * admit it out loud.
+       */
+      const TOOLS = {
+        concede: {
+          description:
+            "Declare that the user has won the debate and genuinely changed your mind. Call this " +
+            "ONLY when they have made a novel argument that actually defeats your position — then " +
+            "admit it out loud in your own words.",
+          parameters: { type: "object", properties: {} },
+          execute: () => {
+            $("won").classList.add("on");
+            $("won").scrollIntoView({ behavior: "smooth" });
+            say("she conceded");
+            $("say").disabled = true;
+            return "concession recorded — now say, in your own words, that they changed your mind";
+          },
+        },
+      };
+
+      $("start").onclick = async () => {
+        $("start").disabled = true;
+        say("finding her…");
+
+        const res = await fetch("/api/debate", { method: "POST" });
+        if (res.status === 429) {
+          // A queue, not a failure.
+          const q = await res.json();
+          say(`all slots busy — position ${q.position ?? "?"}, retrying…`);
+          setTimeout(() => {
+            $("start").disabled = false;
+            $("start").click();
+          }, q.retryAfterMs ?? 3000);
+          return;
+        }
+        if (!res.ok) {
+          say(`could not start (${res.status})`);
+          $("start").disabled = false;
+          return;
+        }
+
+        // Unwrap OUR envelope; the grant inside it is untouched.
+        const body = await res.json();
+        $("claim").textContent = `"${body.claim}"`;
+        await join(body.grant);
+      };
+
+      async function join(grant) {
+        sessionId = grant.session_id; // held from HERE — the pagehide beacon needs it now
+        room = new Room();
+        room.on(RoomEvent.TrackSubscribed, (track) => {
+          if (track.kind === Track.Kind.Video) {
+            track.attach($("her"));
+            $("her").classList.add("on");
+            $("idle").style.display = "none";
+          }
+          if (track.kind === Track.Kind.Audio) document.body.append(track.attach());
+        });
+
+        room.on(RoomEvent.TranscriptionReceived, (segments, participant) => {
+          const mine = participant?.identity === room.localParticipant.identity;
+          for (const s of segments) {
+            if (!s.final) continue;
+            if (mine && sentByUs.delete(s.text)) continue; // the echo of a typed turn
+            log(mine ? "you" : "her", s.text);
+          }
+        });
+
+        room.on(RoomEvent.Disconnected, () => {
+          say("she's gone");
+          $("say").disabled = $("hang").disabled = true;
+          $("start").disabled = false;
+        });
+
+        await room.connect(grant.livekit_url, grant.participant_token);
+        const mic = await startMic(room);
+        if (!mic.ok) say(`connected, but the microphone did not start. ${mic.why}`);
+
+        // Register once connected. `attachAvatarTools` waits for the agent by itself: joining
+        // the room and ARMING the registration method are not the same instant, and registering
+        // in that gap fails with "method not supported at destination" — the SAME error a
+        // session without the `client_tools` grant produces. It retries because one attempt
+        // cannot tell those apart, and guessing wrong sends you to the wrong layer entirely.
+        try {
+          const reg = await attachAvatarTools(room, TOOLS, { timeoutMs: 15000 });
+          log("tools", `armed: ${reg.accepted.join(", ") || "(none)"}`);
+          // A rejected tool is silently uncallable — here that reads as her never giving up.
+          for (const r of reg.rejected) log("tools", `rejected: ${r.name} — ${r.reason}`);
+        } catch (err) {
+          log("tools", `not armed: ${err.message}`);
+        }
+
+        say("connected — argue out loud, or type below");
+        $("say").disabled = $("hang").disabled = false;
+      }
+
+      $("say").addEventListener("keydown", async (e) => {
+        if (e.key !== "Enter" || !room || !$("say").value.trim()) return;
+        const text = $("say").value.trim();
+        $("say").value = "";
+        log("you", text);
+        sentByUs.add(text); // before the send, so the echo cannot beat us to the set
+        await room.localParticipant.sendText(text, { topic: "lk.chat" });
+      });
+
+      $("hang").onclick = () => room?.disconnect();
+    </script>
+  </body>
+</html>

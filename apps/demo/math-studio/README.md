@@ -38,7 +38,9 @@ what a cast that is not this one will get.
   obvious design and it dies on arithmetic: `MAX_TOOLS` is 32, so at three actions apiece you
   fail to register at the eleventh. Long before that you run out of the thing that actually
   binds — `instructions` caps at 4,000 characters and every tool needs a sentence saying when to
-  reach for it.
+  reach for it. When a new capability is needed, it goes on an existing verb as a parameter: that
+  is what `next_task(want)` is, and it is why letting the conversation choose the topic cost no
+  tool slot.
 - **So the manipulatives register with the curriculum, not with the avatar.** Two plain objects
   in `index.html`: a plug point with five methods, and a level that names one by id. Adding a
   Bézier curve is a key in one table and an id in the other. `server.mjs` does not change and
@@ -100,14 +102,61 @@ what a cast that is not this one will get.
   typechecks can still be refused on the wire. This demo's three presets used to be `qwen`, which
   meant the whole registry was a 422 waiting to happen and only the unverified gate hid it. The
   boot-time validator here mirrors what the wire actually takes, not what the schema says.
-- **Two channels page → agent, and the difference is who gets the floor.** A line on the `lk.chat`
-  topic — `room.localParticipant.sendText(text, { topic: "lk.chat" })` — arrives as a turn, so it
-  interrupts her mid-word and she answers it. That is what the box under the board sends, because a
+- **Two channels page → agent, and the question is which one has earned the floor.** A line on the
+  `lk.chat` topic — `room.localParticipant.sendText(text, { topic: "lk.chat" })` — arrives as a turn,
+  so it interrupts her mid-word and she answers it. That is what the box under the board sends, because a
   learner who is lost three seconds into an explanation should not have to wait out the other
-  twenty. The workspace deliberately does **not** use it: a drag emits an event per unit of travel
+  twenty. Most of the workspace deliberately does **not** use it: a drag emits an event per unit of travel
   and the Fourier mixer emitted fifteen in four seconds, which as turns is fifteen interruptions and
   a teacher who never finishes a sentence. Those ride home in `since_last_call` on her next tool
   call instead, gated so she is never handed a hand that is still moving.
+- **Except finishing, which does earn it.** Everything ambient waits for her to ask, and her brief has
+  her asking every eight to ten seconds. For "what have they been up to" that is fine; for "they
+  have just solved it" it is not — the learner sits in front of a finished screen while the teacher
+  talks about something else, and what that feels like is a teacher who is not watching. So the page
+  detects the landing and pushes one line on `lk.chat`, prefixed `WORKSPACE:` so she knows it is the
+  screen and not the learner. Three rules make it safe to interrupt her with:
+  - **Correct only.** A learner sweeping the radius round to `sin θ = 0.5` pauses at 0.3 on the way,
+    and a detector that fired on any settled value hands her a wrong answer to mark out of a gesture
+    that was not finished. Landing on the right answer is unambiguous — it is the end of the task. A
+    wrong one still reaches her on the next check, exactly as before.
+  - **Settled for 650ms**, not the 1.8s the ambient queue waits: long enough to rule out passing
+    through the answer mid-drag, short enough that the praise still belongs to what they just did.
+  - **Marked once.** The push tells her to call `answer`, so `answer` refuses a second correct mark
+    on the same task — otherwise one finish is two questions off a run of ten.
+
+  A manipulative can also tag any single event `tell` to be pushed the same way, which is how
+  completing a Pythagoras rearrangement gets a word even though its answer comes off the keypad.
+- **The conversation steers the course — as a parameter, not a seventh tool.** `next_task` takes an
+  optional `want`: the learner's own words, relayed by her, not interpreted by her. She has the
+  conversation and the page has the curriculum, so the page stays the authority on what is next.
+  Matching is data like everything else here — a level declares `aliases` for "move me to this
+  level" and `hints` for "this level can do that itself", and the resolver knows what a sawtooth is
+  only because the table says so. Three things it has to get right:
+  - *"five circles"* on the Fourier level must not become Circle to sine. A level's own `hints` are
+    checked **before** every other level's name, because what a level can do for itself outranks
+    what another level is called.
+  - *"this is too hard"* contains the word *hard*. The two complaints are matched before the two
+    adjectives, or every one of them moves the learner the wrong way.
+  - A difficulty word is **spent** on the move. Passing "harder" to the new level's `gen` as well
+    makes its task harder too, so one request lands twice and the jump is double what was asked for.
+
+  A phrase that names nothing changes nothing and the result says so, so she can tell them the
+  course has no dinosaurs rather than inventing some.
+- **A level with one question in it is a level you do it once.** The Fourier series used to build
+  the same square wave every time, with the harmonics, the amplitudes and the pass mark baked into
+  the manipulative. They come off the task now, and the level holds a bank of four waves — square,
+  sawtooth, pulse, and the square wave with a fifth circle — which vary the harmonic set, the number
+  of sliders, the rule and the mark. The plugin draws a chain of circles and does not know what a
+  square wave is. Two things the bank has to respect:
+  - **The pass mark is per wave**, because they do not converge at the same rate. A square wave with
+    three of its four circles right is still only 87% matched, so 88 forces all four; a pulse with
+    three of four is 50%, and 90 is the same demand. Triangle waves are absent for exactly this
+    reason — the fundamental alone already scores 88, so every slider after the first is decoration.
+  - **The slider range is a way to leak the answer.** It used to be `1.35/k` against a target of
+    `1/k`, so every target sat at 74% of its own slider and "drag them all three quarters up" solved
+    the level without a thought. `1.2/√k` is still a statement about harmonics rather than about
+    this task's answer, and the targets land at four different fractions.
 - **The learner is on `TranscriptionReceived` too.** Their speech, and the echo of anything they
   type, arrive on the same event her captions do and nothing in the segment says which is which —
   only the participant identity does. Filtered on it, or the caption under her face shows the
@@ -141,6 +190,13 @@ what a cast that is not this one will get.
 The curriculum here is four levels of geometry, trigonometry and signals. The registry is the
 point, and it is easier to see with four manipulatives than with forty — the number that matters
 is that the tool count is six either way.
+
+The steering is deliberately shallow, too. `want` is matched against a table of aliases, not
+understood: it will move you to the Bézier level for "curve" and pick a sawtooth for "sawtooth",
+and it will do nothing at all for "the one where the circles chase each other". Reaching for a
+model to classify the request is the obvious next step and it is the wrong one at this size — a
+tool has 2.5 seconds and the table answers in microseconds. What the table buys is that a level
+teaches the resolver its own vocabulary by being added.
 
 ## Cost
 

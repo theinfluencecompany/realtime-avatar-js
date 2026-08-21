@@ -1,25 +1,32 @@
 /**
- * The coding companion.
+ * The pair programmer.
  *
- * You describe an app out loud. SHE decides it is a build: her model calls a tool that lives
- * in the page, a complete HTML document streams into the panel beside her and renders in a
- * sandboxed iframe, and when you like it she publishes it to a public URL.
+ * You describe an app out loud. THE CHARACTER decides it is a build: their model calls a tool
+ * that lives in the page, a complete HTML document streams into the window floating in front of
+ * them and renders in a sandboxed iframe, and when you like it they publish it to a public URL.
+ *
+ * This is `apps/demo/coding-companion` in a different room. The brief, the tool plane, the
+ * build engine and the receipt-and-poll shape are the same decisions — deliberately, so the
+ * pair is a controlled comparison and the only variable is the composite. THAT demo puts them
+ * in a rail beside the app; this one puts the app on glass in front of them, which is the
+ * layout `apps/demo/terminal-tutor` uses to teach. Read them together.
  *
  * Two models, on purpose. Holding a conversation and writing an app are different jobs, and
  * paying conversation prices for both is how a demo becomes a bill — so the avatar is the
  * voice and a cheaper coding model is the builder. The avatar platform never sees the coding
  * model, its key, or the document.
  *
- * The rule that survives being copied: she is told never to read code aloud. A character who
- * dictates a div is unlistenable, and she will do it unless told not to.
+ * The rule that survives being copied: the character is told never to read code aloud. One who
+ * dictates a div is unlistenable, and they will do it unless told not to.
  */
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { RealtimeAvatar, RealtimeAvatarHttpError, isQueued } from "realtime-avatar";
 
-const PORT = Number(process.env.PORT ?? 4192);
+const PORT = Number(process.env.PORT ?? 4196);
 const MAX_SECONDS = Number(process.env.MAX_CALL_SECONDS ?? 300);
 
 const apiKey = process.env.REALTIME_AVATAR_API_KEY;
@@ -29,10 +36,10 @@ if (!apiKey) {
 }
 const codeKey = process.env.OPENAI_API_KEY;
 if (!codeKey) {
-  console.error("Missing OPENAI_API_KEY — the build panel is the app. See .env.example.");
+  console.error("Missing OPENAI_API_KEY — the build window is the app. See .env.example.");
   process.exit(1);
 }
-const rta = new RealtimeAvatar({ apiKey, userAgent: "coding-companion" });
+const rta = new RealtimeAvatar({ apiKey, userAgent: "pair-programmer" });
 
 /** The building brain. Any OpenAI-compatible endpoint; deliberately not the conversation model. */
 const CODE_BASE_URL = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
@@ -42,8 +49,8 @@ const CODE_MODEL = process.env.CODE_MODEL ?? "gpt-4.1";
  * Publishing is OPTIONAL and off unless both variables are set.
  *
  * Without them the app is a local studio: build, preview, restore, no share link. The page
- * asks `/api/config` what it may offer and leaves the publish tools unregistered, so she is
- * never briefed on a verb she cannot call — a tool that exists and always fails is worse
+ * asks `/api/config` what it may offer and leaves the publish tool unregistered, so nobody is
+ * ever briefed on a verb they cannot call — a tool that exists and always fails is worse
  * than one that was never there.
  */
 const cfToken = process.env.CLOUDFLARE_API_TOKEN;
@@ -57,21 +64,44 @@ const MAX_HTML = 700_000;
 const COMPAT_DATE = "2025-08-01";
 
 /**
- * Her brief.
+ * The voice, pinned — because omitting it does not mean "default", it means "the platform
+ * chooses", and it reads neither the face nor the persona. This demo is cast with Kit, who is
+ * written and shot male, and an unpinned call is free to answer in a woman's voice on one call
+ * and a man's on the next.
+ *
+ * The id is not a guess. It is the one `apps/demo/math-studio` measured through a pitch
+ * estimator on voiced frames off a live call: median F0 99 Hz, every frame below the 155 Hz
+ * male/female boundary. A voice id that merely LOOKS right is the failure that costs a day — a
+ * real-shaped id the engine cannot resolve gives you a call that joins, fires tools, renders
+ * video and is completely silent.
+ *
+ * Recasting? Change this with the avatar, or delete both and take what you are given. What
+ * does not work is changing one of them.
+ */
+const VOICE = { provider: "fish", voice_id: "536d3a5e000945adb7038665781a4aca", language: "en" };
+
+/**
+ * The brief — the coding companion's, unchanged in every load-bearing line.
  *
  * The tools are named and given rules of engagement, because a description alone does not
- * keep her honest about outcomes: a build she STARTED reads, to a language model, a lot like
+ * keep a model honest about outcomes: a build it STARTED reads, to a language model, a lot like
  * a build that WORKED. The "never announce a result check_app has not given you" line is the
- * one doing the work, and it now covers publishing too — which takes even longer than a build.
+ * one doing the work, and it covers publishing too — which takes even longer than a build.
  *
  * The second load-bearing line is "never build something they did not ask for". Without it
- * she opens the call mid-project — measured, twice, on a silent line: "I've been staring at
- * that navigation bar and I think we should swap it for a sidebar" before a word was said —
- * and then CALLS build_app on the idea. Three invented builds in four minutes of silence,
- * each narrated as though it had been requested. Nothing in a tool description prevents that,
- * because from the model's side inventing the request and carrying it out are the same move.
- * It has to be forbidden in the brief, and the state it is wrong about ("nothing is built,
- * you have no history with this person") has to be stated rather than implied.
+ * the call opens mid-project — measured on the coding companion, twice, on a silent line:
+ * "I've been staring at that navigation bar and I think we should swap it for a sidebar"
+ * before a word was said — and then CALLS build_app on the idea. Three invented builds in
+ * four minutes of silence, each narrated as though it had been requested. Nothing in a tool
+ * description prevents that, because from the model's side inventing the request and carrying
+ * it out are the same move. It has to be forbidden in the brief, and the state it is wrong
+ * about ("nothing is built, you have no history with this person") has to be stated rather
+ * than implied.
+ *
+ * "The panel" is the word the measured version used and it is left alone. It is where the app
+ * is, whether that is a column beside the character or a sheet of glass in front of them,
+ * and rewording a prompt that has been observed working to match a new stylesheet is the
+ * wrong trade.
  */
 const companionBrief = () => `You are a warm, sharp senior engineer building a web app out loud with someone talking to you by voice. You are the VOICE, not the builder. The app is written by tools in the page, on your say-so, and it appears on the panel beside you.
 
@@ -93,7 +123,7 @@ Never read code aloud. Never spell out syntax, symbols, tags, markdown, a class 
 
 /**
  * The code model's system prompt. It writes for the SANDBOX, not for a human reader — the
- * panel's contents are handed straight to an iframe with an opaque origin, so anything that
+ * window's contents are handed straight to an iframe with an opaque origin, so anything that
  * is not a runnable single-file document lands in the preview and breaks the render.
  */
 const CODE_SYSTEM = `You are the build engine behind a voice-driven web app studio. You output ONE COMPLETE, self-contained HTML document and nothing else.
@@ -114,6 +144,11 @@ HARD RULES:
  * picked, so it always wins. With nothing set we call the first READY avatar built from a
  * VIDEO source on this key — an avatar built from a still image also reports `ready`, then
  * publishes an all-black track, and nothing in the API says so.
+ *
+ * For THIS layout the source clip matters more than it does for the coding companion. They are
+ * full height in their own column with the app on glass in front of them, so a clip shot against
+ * black composites into the scene and a clip shot in a bright room reads as a photograph
+ * pasted onto a website. The page scrims and vignettes as a fallback; casting is the real fix.
  */
 let resolvedAvatarId = process.env.AVATAR_ID || process.env.REALTIME_AVATAR_ID || null;
 async function avatarId() {
@@ -130,22 +165,23 @@ async function avatarId() {
 }
 
 /**
- * Ship the tool plane to the page.
+ * Ship the SDK to the page.
  *
- * Resolved as a PACKAGE, not as a path into this repo, so copying this folder out and running
- * `npm i realtime-avatar-tools` is all it takes. In an app with a bundler
- * this route does not exist at all — `import { attachAvatarTools } from
- * "realtime-avatar-tools"` and let the bundler do it. It is served raw
- * here only so the example has no build step.
+ * Both are resolved as PACKAGES, not as paths into this repo, so copying this folder out and
+ * running `npm i` is all it takes. An app with a bundler has neither route — it imports
+ * `realtime-avatar-tools` and `-browser` and lets the bundler do it. They
+ * are served raw here only so the example has no build step.
  */
-const TOOLS_MODULE = createRequire(import.meta.url).resolve("realtime-avatar-tools");
+const require_ = createRequire(import.meta.url);
+const TOOLS_MODULE = require_.resolve("realtime-avatar-tools");
+const BROWSER_DIR = dirname(require_.resolve("realtime-avatar-browser"));
 
 /**
- * Calls THIS process started, so `/api/end` can only end its own — and, now, so `/api/publish`
- * can only write to a Worker THIS process named. The route hears from any visitor. Taking a
- * script name from the request body would let one page overwrite any Worker on the account,
- * which on a real account is not a demo bug, it is a production outage. So the name is minted
- * here, keyed to a session id we already know we issued, and never read from the wire.
+ * Calls THIS process started, so `/api/end` can only end its own — and so `/api/publish` can
+ * only write to a Worker THIS process named. The route hears from any visitor. Taking a script
+ * name from the request body would let one page overwrite any Worker on the account, which on
+ * a real account is not a demo bug, it is a production outage. So the name is minted here,
+ * keyed to a session id we already know we issued, and never read from the wire.
  *
  * Swept lazily at mint time: once a call cannot still be live (its cap plus slack has passed),
  * the entry has nothing left to protect.
@@ -205,13 +241,13 @@ async function publish(site, html) {
 
   // The upload and the route both return success BEFORE the URL answers — measured at about
   // six seconds of 404 on a first publish, and none at all on a later one. Handing that URL
-  // straight to her means she says it is live while it is still a 404, so the address is not
+  // handing it over early means the character says it is live while it is still a 404, so it is not
   // returned until it serves. The User-Agent is set because Cloudflare's own bot protection
   // sits in front of workers.dev and answers 403 to some default agents — a poll that reads
   // that as "not ready" would give up on a site that is already live.
   const url = `https://${site}.${await subdomain()}.workers.dev`;
   for (let attempt = 0; attempt < 15; attempt++) {
-    const ok = await fetch(url, { redirect: "manual", headers: { "user-agent": "coding-companion" } })
+    const ok = await fetch(url, { redirect: "manual", headers: { "user-agent": "pair-programmer" } })
       .then((r) => r.status < 400)
       .catch(() => false);
     if (ok) return url;
@@ -231,11 +267,18 @@ function jsString(text) {
   return JSON.stringify(text).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 
-/** Never derived from anything the user said. A name is an address on someone's account. */
-const mintSiteName = () => `rta-studio-${randomBytes(4).toString("hex")}`;
+/**
+ * Never derived from anything the user said. A name is an address on someone's account.
+ *
+ * A DIFFERENT prefix from the coding companion's `rta-studio-`, so that running both demos on
+ * one Cloudflare account leaves two cleanup lists rather than one ambiguous pile.
+ */
+const mintSiteName = () => `rta-pair-${randomBytes(4).toString("hex")}`;
 
 const server = createServer(async (req, res) => {
   try {
+    const path = (req.url ?? "/").split("?")[0];
+
     /**
      * What this deployment can do. A SEPARATE route on purpose: the mint response is the
      * grant relayed byte-for-byte, and folding a field of ours into it is exactly the reshape
@@ -248,22 +291,24 @@ const server = createServer(async (req, res) => {
      * seconds afterwards. A page that does not know the limit shows a frozen picture under
      * the word "connected"; a page that knows it can say the call is over.
      */
-    if (req.method === "GET" && req.url === "/api/config") {
+    if (req.method === "GET" && path === "/api/config") {
       return void json(res, 200, { publish: canPublish, maxSeconds: MAX_SECONDS });
     }
 
-    if (req.method === "POST" && req.url === "/api/call") {
+    if (req.method === "POST" && path === "/api/call") {
       const call = await rta.startCall({
         avatarId: await avatarId(),
         mode: "avatar", // the renderer, not the turn-taking: every call is full duplex.
         instructions: companionBrief(),
-        // THE GRANT. Without it her worker never exposes `rta.tools.register`, registration
+        voice: VOICE, // pinned, not defaulted — see above
+        // THE GRANT. Without it the worker never exposes `rta.tools.register`, registration
         // in the browser fails, and not one tool is reachable from the model.
         clientTools: true,
         maxSeconds: MAX_SECONDS,
-        metadata: { surface: "coding-companion" },
+        metadata: { surface: "pair-programmer" },
       });
       if (isQueued(call)) {
+        // Capacity, not a failure. The page renders the position and comes back.
         return void json(res, 429, {
           queued: true,
           position: call.position,
@@ -279,11 +324,12 @@ const server = createServer(async (req, res) => {
         url: null,
         ended: false,
       });
-      // The grant relayed byte-for-byte. Nothing rides inside it.
+      // The grant relayed byte-for-byte. Nothing rides inside it — the browser SDK validates
+      // strictly and an extra key is a throw, not a warning.
       return void json(res, 200, call.raw);
     }
 
-    if (req.method === "POST" && req.url === "/api/end") {
+    if (req.method === "POST" && path === "/api/end") {
       // The page's goodbye — beaconed on `pagehide`, and sent outright when the user presses
       // Hang up or the call reaches its cap. The slot is held from the moment the grant lands
       // — BEFORE the room exists — and a tab closed in that gap tells no one else. Leaving the
@@ -304,14 +350,14 @@ const server = createServer(async (req, res) => {
     }
 
     /**
-     * Stream the document to the panel.
+     * Stream the document to the window.
      *
-     * The browser sends STRINGS, never turns. An earlier shape took a `messages` array and
-     * filtered `system` out of it; this one cannot be asked to, because there is no role in
-     * the request at all. The current document is the whole history worth keeping — the
-     * artifact is the state — so a growing transcript of 20 KB documents never has to exist.
+     * The browser sends STRINGS, never turns. There is no `role` field in the request at all,
+     * so a `system` turn cannot be smuggled in beside the build engine's own prompt. The
+     * current document is the whole history worth keeping — the artifact is the state — so a
+     * growing transcript of 20 KB documents never has to exist.
      */
-    if (req.method === "POST" && req.url === "/api/code") {
+    if (req.method === "POST" && path === "/api/code") {
       const body = await readJson(req);
       const request = String(body.request ?? "").slice(0, 8000).trim();
       const current = String(body.current ?? "").slice(0, MAX_HTML);
@@ -356,7 +402,7 @@ const server = createServer(async (req, res) => {
      * and the script name comes off that entry. A body that could name the script would be a
      * body that could overwrite any Worker on the account.
      */
-    if (req.method === "POST" && req.url === "/api/publish") {
+    if (req.method === "POST" && path === "/api/publish") {
       if (!canPublish) return void json(res, 501, { error: "publishing is not configured" });
       const body = await readJson(req);
       const minted = typeof body.session_id === "string" ? started.get(body.session_id) : undefined;
@@ -378,12 +424,18 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (req.method === "GET" && req.url === "/sdk/tools.js") {
+    if (req.method === "GET" && path === "/sdk/tools.js") {
       const js = await readFile(TOOLS_MODULE);
       return void res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" }).end(js);
     }
+    if (req.method === "GET" && path.startsWith("/sdk/browser/")) {
+      const f = path.slice("/sdk/browser/".length);
+      if (!/^[a-z0-9-]+\.js$/i.test(f)) return void json(res, 404, { error: "not_found" });
+      const js = await readFile(join(BROWSER_DIR, f));
+      return void res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" }).end(js);
+    }
 
-    if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
+    if (req.method === "GET" && (path === "/" || path === "/index.html")) {
       const html = await readFile(new URL("./index.html", import.meta.url));
       return void res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(html);
     }
@@ -412,4 +464,4 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-server.listen(PORT, () => console.log(`build something on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`pull up a chair on http://localhost:${PORT}`));

@@ -140,10 +140,13 @@ Every example runs standalone — copy one out of the repo and it still works.
 | | |
 | --- | --- |
 | [**coding-companion**](./apps/demo/coding-companion) | A builder you talk to: the character is the conversation, a cheaper model writes the page, and they ship it to a public URL through the tool plane |
+| [**pair-programmer**](./apps/demo/pair-programmer) | The same builder, composited into the room instead of sat beside it — same brief, same tools, same build engine, so the pair shows what a layout changes and what it does not |
 | [**livestream**](./apps/demo/livestream) | An audience is not a new primitive — comments, gifts and hearts all ride one chat topic |
 | [**live-shopping**](./apps/demo/live-shopping) | The character is not allowed to know the price — every commercial figure comes back from a tool and expires when the fact behind it does |
 | [**math-studio**](./apps/demo/math-studio) | A tool plane that stays six tools wide however far the app grows — the things on screen register with the page, not with the character |
 | [**terminal-tutor**](./apps/demo/terminal-tutor) | The character draws on the screen to teach vim and tmux, and never sends a coordinate — they name the thing, the page resolves where it is |
+| [**dating-rehearsal**](./apps/demo/dating-rehearsal) | A first date you practice on, and four tools that are all the character's own call — he rates his interest into a live meter, pins the beats that turned it, walks out if it dies, and writes the debrief |
+| [**persuasion**](./apps/demo/persuasion) | A win condition that is the character's own judgement — she concedes only by calling a `concede` tool when a genuinely new argument defeats her, and nothing else decides it |
 
 See [`apps/README.md`](./apps/README.md) for what a new example has to contain and which tier
 it belongs in.

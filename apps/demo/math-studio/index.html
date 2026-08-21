@@ -830,7 +830,15 @@
             s.querySelector("#pyC").style.opacity = lay === "c" ? ".6" : "0";
             s.querySelector("#pyAB").style.opacity = lay === "ab" ? ".6" : "0";
             if (fromUser && lay !== was && lay !== "mixed") {
-              this._q.push({ t:"arranged", as: lay });
+              /* `tell` is the flag that says THIS ONE HAS EARNED THE FLOOR — the dispatcher pushes
+                 it to her as a turn instead of leaving it in the ambient queue. Finishing an
+                 arrangement is the whole point of this manipulative and it happens once; a drag
+                 frame happens sixty times a second and carries no `tell`. Written as speech,
+                 because she reads it and she is read aloud: no superscripts, no symbols. */
+              this._q.push({ t:"arranged", as: lay, tell: lay === "ab"
+                ? "they have just rearranged it into the two small squares, so the hole is now "
+                  + "a squared plus b squared"
+                : "they have just put it back to the one tilted square, so the hole is c squared" });
               Sfx.play("levelup"); Juice.confetti(18);
               Trace.work("learner completed an arrangement", lay,
                 lay === "ab" ? "the hole is now a² + b²" : "the hole is the tilted square, c²");
@@ -878,7 +886,14 @@
               const t = { i, el, slot };
               el.style.transform = this._tf(this._slots.find((x) => x.id === slot));
               drag(s, el, {
-                down: (p) => { t.p0 = p; t.base = this._tf(this._slots.find((x) => x.id === t.slot));
+                /* `_gen++` here is what the other three manipulatives do in their own drag
+                   handlers, and this one was missing it. `demonstrate` shows the other
+                   arrangement and puts it back 2.6 seconds later on a timeout — so a learner who
+                   took hold of a triangle inside that window had their move quietly reverted by
+                   an animation that had already finished on screen. Taking hold of it cancels
+                   the hand-back, exactly as it does for the Bézier handles. */
+                down: (p) => { this._gen++;
+                  t.p0 = p; t.base = this._tf(this._slots.find((x) => x.id === t.slot));
                   s.appendChild(el); },
                 move: (p) => { el.style.transform =
                   `translate(${p.x-t.p0.x}px, ${p.y-t.p0.y}px) ` + t.base; },
@@ -1200,26 +1215,43 @@
         /* ── Fourier epicycles ──────────────────────────────────────────────────
            Jez Swanson's interactive introduction to Fourier transforms and Jack Schaedler's
            "Seeing circles, sines and signals", which is where the chain of circles drawing a wave
-           comes from. Four odd harmonics, an amplitude each, and the epicycle tip and the wave
+           comes from. A harmonic per circle, an amplitude each, and the epicycle tip and the wave
            are the same height by construction rather than by coincidence: one scale for both.
 
-           This is the level the curriculum table had been claiming for two revisions, and the
-           reason it was last is real — a continuous approximation has no crisp right answer. So
-           the check degrades to a number: how close the wave is to the target, as a percentage,
-           which is discrete enough to mark and honest about what it is measuring.
+           A continuous approximation has no crisp right answer, so the check degrades to a
+           number: how close the wave is to the target, as a percentage, which is discrete enough
+           to mark and honest about what it is measuring.
 
-           The thing to find is that the amplitudes are 1, a third, a fifth, a seventh. */
+           THE TASK PICKS THE WAVE, and it used not to. The harmonics, the amplitudes and the pass
+           mark were constants on this object, so the level had exactly one question in it — a
+           learner who reached it twice built the same square wave twice, and `demonstrate` gave
+           away the only answer it had. All four now come off `task`, which is what lets the level
+           below hold a bank of waves with different harmonic sets, different rules and different
+           slider counts while this file stays a thing that draws a chain of circles. It does not
+           know what a square wave is.
+
+           WHERE THE SLIDER RANGE COMES FROM, because it is a way to leak the answer. It used to
+           be 1.35/k against a target of 1/k, so every target sat at 74% of its own slider and
+           "drag them all three quarters of the way up" solved the level without a thought. It is
+           1.2/√k now: still a statement about harmonics rather than about this task's answer, and
+           the targets land at different fractions of each slider. */
         fourier_epicycles: {
-          id:"fourier_epicycles", ages:[15,16], takesInput:true, size:{ w:560, h:336 },
-          hint:"Drag the four sliders until your wave sits on the grey one. Each slider is one circle in the chain.",
-          HARM:[1,3,5,7], S:46, BAND:78,
+          id:"fourier_epicycles", ages:[15,16], takesInput:true, size:{ w:560, h:350 },
+          hint:"Drag the sliders until your wave sits on the grey one. Each slider is one circle in the chain.",
+          S:42, BAND:78,
           _C:{ x:128, y:112 }, _W:{ x0:258, x1:548 },
-          _MIX:{ y0:238, y1:302, xs:[100,220,340,460] },
-          _svg:null, _host:null, _a:[0,0,0,0], _q:[], _touched:false, _last:-1,
+          _MIX:{ y0:236, y1:310, x0:92, x1:468 },
+          _svg:null, _host:null, _t:null, _X:[], _a:[], _q:[], _touched:false, _last:-1,
           _gen:0, _life:0, _th:0,
-          _vmax(i) { return 1.35/this.HARM[i]; },
-          _target() { return this.HARM.map((k) => 1/k); },
-          _sum(th, a) { return this.HARM.reduce((v, k, i) => v + a[i]*Math.sin(k*th), 0); },
+          /* Defaults are the square wave, for the console driver and for a task that forgets. */
+          _harm() { return this._t?.harmonics ?? [1,3,5,7]; },
+          _target() { return this._t?.target ?? [1,1/3,1/5,1/7]; },
+          _need() { return this._t?.need ?? 88; },
+          _vmax(i) { return 1.2/Math.sqrt(this._harm()[i]); },
+          /** Slider x positions, spread across the mixer for however many circles there are. */
+          _xs() { const n = this._harm().length, { x0, x1 } = this._MIX;
+            return Array.from({ length:n }, (_, i) => n < 2 ? (x0+x1)/2 : x0 + (x1-x0)*i/(n-1)); },
+          _sum(th, a) { return this._harm().reduce((v, k, i) => v + (a[i] ?? 0)*Math.sin(k*th), 0); },
           _wx(th) { return this._W.x0 + (th/(Math.PI*2))*(this._W.x1-this._W.x0); },
           _wy(v) { return clamp(this._C.y - this.S*v, this._C.y-this.BAND, this._C.y+this.BAND); },
           _path(a) {
@@ -1245,24 +1277,24 @@
               at(s.querySelector("#foK"+i), 0, this._sy(i, v)-this._MIX.y1);
               s.querySelector("#foV"+i).textContent = v.toFixed(2);
             });
-            const fit = this._fit();
-            s.querySelector("#foFit").textContent = `fit ${fit}%`;
-            s.querySelector("#foFit").style.fill = fit >= 88 ? "var(--grass)" : "var(--dim)";
+            const fit = this._fit(), need = this._need();
+            s.querySelector("#foFit").textContent = `fit ${fit}% · need ${need}%`;
+            s.querySelector("#foFit").style.fill = fit >= need ? "var(--grass)" : "var(--dim)";
             if (!fromUser) return;
             this._touched = true;
             if (fit === this._last) return;
             const was = this._last; this._last = fit;
             this._q.push({ t:"fit", percent:fit });
-            if (fit >= 88 && was < 88) { Sfx.play("correct"); Juice.confetti(18); }
+            if (fit >= need && was < need) { Sfx.play("correct"); Juice.confetti(18); }
             Trace.work("learner tuned harmonics", this._a.map((v) => v.toFixed(2)).join(" "), `fit ${fit}%`);
           },
           _tick() {
             const s = this._svg; if (!s) return;
             if (!document.body.classList.contains("calm")) this._th = (this._th + .016) % (Math.PI*2);
             let x = this._C.x, y = this._C.y;
-            const pts = [`${x},${y}`];
+            const pts = [`${x},${y}`], harm = this._harm();
             this._a.forEach((v, i) => {
-              const k = this.HARM[i], r = this.S*v;
+              const k = harm[i], r = this.S*v;
               const c = s.querySelector("#foC"+i);
               c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", Math.max(0, r));
               x += r*Math.cos(k*this._th); y -= r*Math.sin(k*this._th);
@@ -1280,7 +1312,13 @@
           },
           mount(host, task) {
             this._host = host; host.innerHTML = "";
-            this._q = []; this._touched = false; this._last = -1; this._th = 0; this._a = [0,0,0,0];
+            /* The task, held for the whole mount: every method above reads the harmonics, the
+               target and the pass mark off it, and none of them is a constant on this object. */
+            this._t = task ?? null;
+            this._X = this._xs();
+            const harm = this._harm(), n = harm.length;
+            this._q = []; this._touched = false; this._last = -1; this._th = 0;
+            this._a = new Array(n).fill(0);
             const life = ++this._life;
             this._gen++;
             const s = this._svg = plot(host, this.size), C = this._C, W = this._W, M = this._MIX;
@@ -1290,7 +1328,7 @@
               { stroke:"#e2e5ec", strokeWidth:"2" });
             svgIn(s, "path", { d:this._path(this._target()) },
               { fill:"none", stroke:"#bcc3d2", strokeWidth:"3", strokeDasharray:"7 6" });
-            for (let i = 0; i < 4; i++) svgIn(s, "circle", { id:"foC"+i, cx:C.x, cy:C.y, r:0 },
+            for (let i = 0; i < n; i++) svgIn(s, "circle", { id:"foC"+i, cx:C.x, cy:C.y, r:0 },
               { fill:"none", stroke:"#ccd3e0", strokeWidth:"1.5" });
             svgIn(s, "polyline", { id:"foArm" },
               { fill:"none", stroke:"var(--red)", strokeWidth:"3", strokeLinejoin:"round" });
@@ -1300,17 +1338,23 @@
               { fill:"none", stroke:"var(--gold)", strokeWidth:"3.5", strokeLinecap:"round" });
             svgIn(s, "circle", { id:"foTip", r:6 }, { fill:"var(--red)" });
             svgIn(s, "circle", { id:"foMk", r:6 }, { fill:"var(--grass)" });
-            svgTxt(s, 508, 22, "", "var(--dim)").setAttribute("id", "foFit");
-            svgTxt(s, 300, 22, "grey is the target", "#bcc3d2");
+            /* Anchored to the two ends of the wave rather than centred at two guessed x's. Both
+               of these grow — "need 92%" is wider than "need 88%", and the target caption used to
+               carry the wave's name — and centred captions that grow collide. The wave is named
+               in the question above the board; it does not need saying twice. */
+            svgTxt(s, W.x1, 22, "", "var(--dim)").setAttribute("id", "foFit");
+            s.querySelector("#foFit").setAttribute("text-anchor", "end");
+            svgTxt(s, W.x0, 22, "grey is the target", "#bcc3d2")
+              .setAttribute("text-anchor", "start");
 
-            M.xs.forEach((x, i) => {
-              svgTxt(s, x, 226, this.HARM[i] === 1 ? "sin θ" : `sin ${this.HARM[i]}θ`, "var(--dim)");
+            this._X.forEach((x, i) => {
+              svgTxt(s, x, 224, harm[i] === 1 ? "sin θ" : `sin ${harm[i]}θ`, "var(--dim)");
               svgIn(s, "line", { x1:x, y1:M.y0, x2:x, y2:M.y1 },
                 { stroke:"var(--line)", strokeWidth:"6", strokeLinecap:"round" });
               const k = svgIn(s, "circle", { id:"foK"+i, cx:x, cy:M.y1, r:11 },
                 { fill:"var(--gold)", stroke:"#fff", strokeWidth:"3" });
               k.classList.add("knob");
-              svgTxt(s, x, 322, "0.00", "var(--dim)").setAttribute("id", "foV"+i);
+              svgTxt(s, x, 330, "0.00", "var(--dim)").setAttribute("id", "foV"+i);
               const hit = svgIn(s, "rect", { x:x-24, y:M.y0-16, width:48, height:M.y1-M.y0+32 },
                 { fill:"transparent" });
               const set = (p) => {
@@ -1330,8 +1374,10 @@
               this._tick(); requestAnimationFrame(spin); };
             requestAnimationFrame(spin);
             Sfx.play("pop");
-            return { harmonics:this.HARM, amplitudes:[0,0,0,0], fit_percent:this._fit(),
-                     takes_input:true, note:"they drag four amplitudes; the fit percentage is their answer" };
+            return { wave: task?.label ?? "wave", harmonics: harm, circles: n,
+                     amplitudes: this._a.slice(), fit_percent: this._fit(), need: this._need(),
+                     takes_input:true,
+                     note:`they drag ${n} amplitudes; the fit percentage is their answer` };
           },
           demonstrate(task) {
             if (!this._svg) return { error:"nothing mounted" };
@@ -1340,7 +1386,7 @@
             const glide = () => {
               if (this._gen !== gen || !this._svg) return;
               const k = Math.min(1, (performance.now()-t0)/1100), e = k*k*(3-2*k);
-              this._a = home.map((v, i) => v + (tgt[i]-v)*e);
+              this._a = home.map((v, i) => v + ((tgt[i] ?? 0)-v)*e);
               this._redraw(false);
               if (k < 1) return void requestAnimationFrame(glide);
               setTimeout(() => {                     // shown, then handed back to the learner
@@ -1349,9 +1395,10 @@
               }, 1800);
             };
             requestAnimationFrame(glide);
-            return { explain:"a square wave is the odd harmonics only, and each one is smaller: "
-              + "the whole of the first, a third of the third, a fifth of the fifth, a seventh of "
-              + "the seventh. Every extra one squares the corners a little more" };
+            /* The sentence belongs to the WAVE, not to this file — there are four of them in the
+               level's bank and each one is a different rule. */
+            return { explain: (task ?? this._t)?.explain
+              ?? "each circle is one harmonic, and its slider is how big that circle is" };
           },
           read() { return this._touched ? { value: this._fit() } : null; },
           events() { const q = this._q; this._q = []; return q; },
@@ -1389,11 +1436,68 @@
       // c stays inside 20, so Pythagoras is the one level left that still wants the keypad.
       const TRIPLES = [[3,4,5],[6,8,10],[5,12,13],[9,12,15],[8,15,17],[12,16,20]];
 
+      /**
+       * The Fourier level's question bank.
+       *
+       * One entry is one wave: which circles are in the chain, how big each one has to be, the
+       * rule a learner can say out loud once they find it, and the mark that counts as matched.
+       * The manipulative reads all of it off the task and knows none of it — which is why adding
+       * a fifth wave here costs nothing anywhere else.
+       *
+       * `need` IS PER WAVE, and it has to be. They do not converge at the same rate: a square
+       * wave with three of its four circles set correctly is still only 87% matched, so 88 forces
+       * all four; a pulse with three of four is 50%, and 90 is the same demand. Triangle waves
+       * are absent for exactly this reason — the fundamental alone already scores 88, so every
+       * slider after the first would be decoration.
+       */
+      const FOURIER_WAVES = [
+        { wave:"square", label:"square wave", need:88,
+          harmonics:[1,3,5,7], target:[1, 1/3, 1/5, 1/7],
+          aliases:["square"],
+          explain:"a square wave is the odd circles only, and each one smaller: the whole of the "
+            + "first, a third of the third, a fifth of the fifth, a seventh of the seventh" },
+        { wave:"sawtooth", label:"sawtooth", need:88,
+          harmonics:[1,2,3,4], target:[1, 1/2, 1/3, 1/4],
+          aliases:["saw","sawtooth","ramp"],
+          explain:"a sawtooth takes every circle, not just the odd ones, and they fall away the "
+            + "same way: the whole of the first, a half, a third, a quarter" },
+        { wave:"pulse", label:"pulse", need:90,
+          harmonics:[1,2,3,4], target:[.45,.45,.45,.45],
+          aliases:["pulse","spike","comb","flat"],
+          explain:"all four the same size. Equal circles line up into one spike and cancel each "
+            + "other everywhere else, which is why this one is a pulse rather than a wave" },
+        { wave:"square5", label:"square wave with five circles", need:92,
+          harmonics:[1,3,5,7,9], target:[1, 1/3, 1/5, 1/7, 1/9],
+          aliases:["five","ninth","longer","sharper"],
+          explain:"the same odd rule as the square wave with one more circle on the end, a ninth "
+            + "of the ninth — and every circle you add squares the corners a little further" },
+      ];
+
+      /* ══ WHAT THEY ASKED FOR ═════════════════════════════════════════════════
+         A level that wants to hear a request declares `aliases` and reads the `hint` its `gen`
+         is handed. Both are optional and both are data: the resolver below does not know what a
+         sawtooth is, and neither does the dispatcher. See `resolveWant`. */
+      const pickBy = (list, hint, fallback) => {
+        const q = String(hint ?? "").toLowerCase();
+        const asked = q && list.find((w) => w.aliases.some((a) => q.includes(a)));
+        return asked ? { ...asked, asked:true } : { ...fallback(), asked:false };
+      };
+
       const CURRICULUM = [
         { id:"geo.pythagoras", strand:"geometry", name:"Pythagoras", ages:[11,13], difficulty:5,
           manipulative:"pythagoras_rearrange", input:"keypad20",
-          gen() { const [a,b,c] = TRIPLES[Math.floor(Math.random()*TRIPLES.length)];
-            return { a, b, want:c }; },
+          aliases:["pythagoras","hypotenuse","right angle","right-angled","triangle","leg"],
+          hints:["bigger","smaller","larger","big numbers","small numbers"],
+          /* `hint` is whatever the learner asked for, in their own words, relayed by her. A level
+             that can honour it does and reports `asked`; one that cannot ignores the argument and
+             nothing breaks. Difficulty words never reach here — those move the level instead. */
+          gen(hint) {
+            const q = String(hint ?? "").toLowerCase();
+            const big = /\b(big|bigger|large|larger)/.test(q);
+            const small = /\b(small|smaller|little|tiny)/.test(q);
+            const pool = big ? TRIPLES.slice(3) : small ? TRIPLES.slice(0, 2) : TRIPLES;
+            const [a,b,c] = pool[Math.floor(Math.random()*pool.length)];
+            return { a, b, want:c, asked: big || small }; },
           prompt: (t, v) => `${t.a}² ＋ ${t.b}² ＝ ` + blank(v) + "²",
           say: (t) => `a right angled triangle with legs ${t.a} and ${t.b} — how long is the hypotenuse`,
           check: (t, g) => ({ correct: g === t.want, expected: t.want }),
@@ -1403,10 +1507,18 @@
 
         { ...onWorkspace, id:"geo.bezier", strand:"geometry", name:"Bézier · de Casteljau",
           ages:[14,16], difficulty:7, manipulative:"bezier_casteljau",
+          aliases:["bezier","bézier","casteljau","curve","spline","ring","handle"],
+          hints:["tighter","tight","precise","wider","wide","generous"],
           /* The rings come off a curve that already exists, so every task is solvable and
              `demonstrate` can walk to the real answer. Rejecting the near-together and the
              hugging-the-baseline cases is the difference between a puzzle and a formality. */
-          gen() {
+          gen(hint) {
+            const q = String(hint ?? "").toLowerCase();
+            /* The one dial a ring has. Worded so it cannot collide with easier/harder — those
+               move the level, and a request that did both would move them twice as far as asked. */
+            const tight = /\b(tight|tighter|precise)/.test(q);
+            const wide = /\b(wide|wider|generous)/.test(q);
+            const r = tight ? 17 : wide ? 33 : 24;
             const M = MANIPULATIVES.bezier_casteljau, B = M.BOX;
             const rnd = () => ({ x: B.x0+70 + Math.random()*(B.x1-B.x0-140),
                                  y: B.y0+16 + Math.random()*(B.y1-B.y0-96) });
@@ -1415,9 +1527,9 @@
               const r1 = M.bez(c1, c2, 1/3), r2 = M.bez(c1, c2, 2/3);
               if (Math.hypot(r1.x-r2.x, r1.y-r2.y) < 120) continue;
               if (Math.min(r1.y, r2.y) > B.y1-70) continue;
-              return { rings:[{ ...r1, r:24 }, { ...r2, r:24 }] };
+              return { rings:[{ ...r1, r }, { ...r2, r }], asked: tight || wide };
             }
-            return { rings:[{ x:190, y:96, r:24 }, { x:390, y:170, r:24 }] };
+            return { rings:[{ x:190, y:96, r }, { x:390, y:170, r }], asked: tight || wide };
           },
           prompt: (t, v) => v == null ? "Thread the curve through both rings"
             : `${blank(v)} of ${t.rings.length} rings threaded`,
@@ -1426,8 +1538,17 @@
 
         { ...onWorkspace, id:"trig.circlesine", strand:"trigonometry", name:"Circle to sine",
           ages:[13,15], difficulty:6, manipulative:"circle_sine",
+          aliases:["sine","sin ","circle","radius","angle","degree","trig"],
+          hints:["negative","minus","below","positive","above","half"],
           // Never 0: the radius starts at 0°, so a target of zero would already be satisfied.
-          gen() { const T = [1, .5, -1, -.5]; return { target: T[Math.floor(Math.random()*T.length)] }; },
+          gen(hint) {
+            const q = String(hint ?? "").toLowerCase();
+            const neg = /\b(neg|minus|below|under|bottom)/.test(q);
+            const pos = /\b(pos|above|top)/.test(q);
+            const half = /\b(half|0 5|point five)/.test(q);
+            const T = neg ? [-1, -.5] : pos ? [1, .5] : half ? [.5, -.5] : [1, .5, -1, -.5];
+            return { target: T[Math.floor(Math.random()*T.length)],
+                     asked: neg || pos || half }; },
           prompt: (t, v) => `sin θ ＝ ${t.target}` + (v == null ? " " + blank(null) : `　·　you made ${blank(v)}`),
           say: (t) => `turn the radius until the height is ${t.target}`,
           // A tolerance, not an equality — and both angles that satisfy it are right.
@@ -1435,10 +1556,23 @@
 
         { ...onWorkspace, id:"sig.fourier", strand:"signals", name:"Fourier series", ages:[15,16],
           difficulty:9, manipulative:"fourier_epicycles",
-          gen() { return { need: 88 }; },
-          prompt: (t, v) => v == null ? `Match the grey wave — ${t.need}% or better`
+          aliases:["fourier","harmonic","epicycle","square wave","sawtooth","pulse","signal",
+                   "series","wave"],
+          /* Every word the wave bank answers to. It is derived rather than written out, so a
+             fifth wave teaches the resolver its own name by being added to the table. */
+          hints: FOURIER_WAVES.flatMap((w) => w.aliases),
+          /* Four waves, and never the one they have just done — a level whose every task was the
+             same square wave was a level with one question in it. A learner who asks for the
+             sawtooth gets the sawtooth; everyone else gets one they have not just built. */
+          gen(hint) {
+            return pickBy(FOURIER_WAVES, hint, () => {
+              const pool = FOURIER_WAVES.filter((w) => w.wave !== task?.wave);
+              return pool[Math.floor(Math.random()*pool.length)];
+            }); },
+          prompt: (t, v) => v == null ? `Match the grey ${t.label} — ${t.need}% or better`
             : `fit ${blank(v)}%`,
-          say: (t) => "build the wave: set the four amplitudes until yours sits on the grey one",
+          say: (t) => `build the ${t.label}: set the ${t.harmonics.length} amplitudes until yours `
+            + `sits on the grey one`,
           // No crisp right answer exists, so the check degrades to a threshold on the fit.
           check: (t, g) => ({ correct: g >= t.need, expected: t.need }) },
 
@@ -1468,6 +1602,72 @@
       let level = RUNNABLE.find((l) => l.id === save.levelId) ?? RUNNABLE[0];
       let task = null, active = null;          // active = the mounted manipulative
       let done = 0, right = 0, streak = 0, wrongRun = 0, history = [], t0 = 0;
+      /** True only for a task SHE set. The page previews a level the moment you pick one, and a
+       *  preview is not a question anybody asked — so the workspace must not interrupt her about
+       *  one, or she marks an answer to something she never said out loud. */
+      let tutorLed = false;
+
+      /** The one place a task begins. Three things reset with it and forgetting any of them is a
+       *  bug you only see on the second question: the workspace's event queue, the latch that
+       *  lets the screen take the floor, and what it has already said. */
+      function setTask(t, fromTutor = false) {
+        task = t; tutorLed = fromTutor; Activity.reset();
+      }
+
+      /**
+       * WHAT THEY ASKED FOR, resolved against the curriculum rather than against her judgement.
+       *
+       * She has the conversation and the page has the course, so `next_task` takes a `want` — the
+       * learner's own words, relayed, not interpreted. Nothing here parses meaning: a level
+       * declares `aliases`, this scores against those and against the strand names, and the two
+       * difficulty phrases fall through to the same `shift` the streak logic uses. A phrase that
+       * names nothing changes nothing and says so, which is the important half — she must not
+       * promise a topic the curriculum does not have.
+       *
+       * The hint goes on to `gen` whether or not the level moved, because a level can honour a
+       * request without being a different level: "can we do a sawtooth" on the Fourier level is
+       * the same level and a different wave.
+       *
+       * WHICH IS WHY `hints` IS CHECKED FIRST. A level lists there whatever its own `gen`
+       * understands, and a phrase that matches stays put. Without it "five circles" on the
+       * Fourier level moved them to Circle to sine — "circles" is that level's word — and the
+       * wave they actually asked for was never reached. What a level can do for itself outranks
+       * what another level is named.
+       */
+      const NORM = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ");
+      /* "too hard" is a request for something EASIER and it contains the word hard, so the two
+         complaints have to be read before the two adjectives or every one of them goes the wrong
+         way. Order in DIRS is the whole fix. */
+      const TOO_HARD = /\btoo (hard|difficult|fast|tricky|much)\b/;
+      const TOO_EASY = /\btoo (easy|simple|slow|basic)\b/;
+      const EASIER = /\b(easier|easy|simpler|simple|slower|back|down)\b/;
+      const HARDER = /\b(harder|hard|tougher|tough|faster|next|up|advanced)\b/;
+      const DIRS = [[TOO_HARD, -1, "easier"], [TOO_EASY, +1, "harder"],
+                    [EASIER, -1, "easier"], [HARDER, +1, "harder"]];
+      function resolveWant(raw) {
+        const q = NORM(raw);
+        if (!q.trim()) return { asked:false };
+        const hits = (l, key) => (l[key] ?? []).some((a) => q.includes(NORM(a).trim()));
+        if (hits(level, "hints")) {
+          Trace.work("she relayed a request", raw, `${level.name} can do that itself`);
+          return { asked:true, moved:false, own:true };
+        }
+        const named = RUNNABLE.find((l) => l !== level && hits(l, "aliases"))
+          ?? RUNNABLE.find((l) => l !== level && q.includes(l.strand));
+        if (named) {
+          level = named; save.levelId = level.id; persist();
+          Trace.work("she relayed a request", raw, `moved to ${level.name}`);
+          return { asked:true, moved:true, to:level.name };
+        }
+        for (const [re, dir, word] of DIRS) {
+          if (!re.test(q)) continue;
+          const moved = nudge(dir);
+          Trace.work("she relayed a request", raw,
+            moved ? `${word} — now ${level.name}` : `${word} — nothing in the course is`);
+          return { asked:true, moved, to:level.name, direction:word };
+        }
+        return { asked:true, moved:false };
+      }
 
       function mountFor(t) {
         const next = MANIPULATIVES[level.manipulative];
@@ -1499,7 +1699,7 @@
        *  the keypad, which reads as "this is still a calculator". A course picker that does not
        *  show you the course is not a course picker. */
       function preview() {
-        task = { ...level.gen(), helped:false };
+        setTask({ ...level.gen(), helped:false });
         renderQ(null);
         mountFor(task);
         hud();
@@ -1542,6 +1742,26 @@
         return true;
       }
 
+      /**
+       * The same move, for a learner who asked for it in words rather than earning it on a streak.
+       *
+       * `shift` stays inside the strand deliberately: levelling up on three right answers should
+       * keep you on the topic you are getting good at. Asking out loud is a different request —
+       * it is about difficulty and not about topic, and Signals has exactly ONE runnable level,
+       * so "this is too hard" on the Fourier series used to leave them exactly where they were.
+       * When the strand runs out, the nearest level in the right direction anywhere in the course
+       * is a better answer than no answer. It still returns false when there genuinely isn't one.
+       */
+      function nudge(dir) {
+        if (shift(dir)) return true;
+        const away = RUNNABLE
+          .filter((l) => dir > 0 ? l.difficulty > level.difficulty : l.difficulty < level.difficulty)
+          .sort((a, b) => dir > 0 ? a.difficulty - b.difficulty : b.difficulty - a.difficulty);
+        if (!away.length) return false;
+        level = away[0]; save.levelId = level.id; persist();
+        return true;
+      }
+
       function reportCard() {
         const secs = Math.round((performance.now()-t0)/1000);
         const acc = done ? right/done : 0;
@@ -1572,17 +1792,43 @@
       ══════════════════════════════════════════════════════════════════════════ */
       const VERBS = {
         next_task: {
-          description:"The next thing to work on. The system sets the difficulty — never invent your own. Ten per run.",
-          parameters:{ type:"object", properties:{} },
-          execute: () => {
+          description:"The next thing to work on. The system sets the difficulty — never invent your own. If they asked for a topic, or for easier or harder, pass their own words as want. Ten per run.",
+          parameters:{ type:"object", properties:{ want:{ type:"string",
+            description:"What they asked for, in their words — a topic, or easier / harder. Leave it out if they did not ask for anything." } } },
+          execute: ({ want }) => {
             if (done >= RUN) return { ok:false, finished:true, note:"ten done — call celebrate kind=finished" };
             if (!t0) t0 = performance.now();
-            task = { ...level.gen(), helped:false };
-            renderQ(null); hud();
+            /* Their request is honoured HERE, before the task is made, and it can be honoured in
+               either of two places: `resolveWant` may move the level, and the same words then go
+               to `gen`, which may pick a different question inside it. Both are the curriculum's
+               decision and neither is hers.
+
+               THE WORDS ARE NOT PASSED ON WHEN THEY WERE SPENT ON THE MOVE. "harder" that took
+               them from Pythagoras to Bézier is finished — handing it to Bézier's `gen` as well
+               makes the rings smaller too, so one request lands twice and the jump is twice what
+               they asked for. */
+            const req = resolveWant(want);
+            const hint = req.direction ? null : want;
             if (active) { active.unmount(); active = null; }
             $("work").innerHTML = "";
+            setTask({ ...level.gen(hint), helped:false }, true);
+            renderQ(null); hud();
+            /* Whether the ask was met is the LEVEL's answer, not a guess from the phrasing: a
+               `gen` that used the hint says so with `asked`. She has to be able to tell them
+               plainly when the course has nothing for them. */
+            const honoured = req.moved || task.asked === true;
             return { level: level.name, index: done+1, of: RUN,
-                     say: level.say(task) };
+                     say: level.say(task),
+                     ...(req.asked ? {
+                       asked_for: String(want).slice(0, 60),
+                       honoured,
+                       note: honoured
+                         ? `their request was honoured — this is ${level.name}`
+                         : req.direction
+                           ? `there is nothing ${req.direction} in the course than ${level.name} — `
+                             + "tell them that plainly"
+                           : "nothing in the course matches that, so this is simply the next task on "
+                             + "the level they are on. Say so plainly rather than pretending" } : {}) };
           } },
         show: {
           description:"Put the current task on the workspace. It picks the right picture for this level by itself.",
@@ -1610,9 +1856,16 @@
           parameters:{ type:"object", properties:{ heard:{ type:"number" } } },
           execute: ({ heard }) => {
             if (!task) return { ok:false, error:"no task yet" };
+            /* Once is enough. She is told the moment the workspace comes to rest on a right
+               answer, and a push she answers twice is a question counted twice against the run
+               of ten. A WRONG answer deliberately does not latch: the brief tells her to
+               demonstrate and let them try again, and they must be able to. */
+            if (task.marked) return { answered:false, already_right:true,
+              note:"they already got this one — call next_task" };
             /* Marking mid-drag is marking a hand that has not landed. Before the quiet gate, a
                silent ten-second check that happened to land during a drag read the workspace
-               half-moved and scored it. */
+               half-moved and scored it. `busy` opens the moment the answer on screen is right,
+               which is what stops the push below racing its own gate. */
             if (typeof heard !== "number" && Activity.busy())
               return { answered:false, still_working:true,
                        note:"they are still moving it — wait a few seconds and check again" };
@@ -1631,6 +1884,7 @@
                          : typed != null ? "typed" : tapped != null ? "tapped" : "workspace";
             const verdict = level.check(task, given);
             const ok = verdict.correct;
+            if (ok) task.marked = true;
             done++; if (ok) { right++; streak++; wrongRun = 0; } else { streak = 0; wrongRun++; }
             history.push({ ...task, ok });
             renderQ(given); hud(); tapped = null; typed = null;
@@ -1664,7 +1918,8 @@
       };
 
       /* ══ WHAT THEY DID WHILE SHE WAS NOT ASKING ═══════════════════════════════
-         The piggyback, with two rules the raw queue never had.
+         The piggyback, with two rules the raw queue never had — and one thing that does not ride
+         it at all, because it cannot afford to.
 
          QUIET. Nothing is handed over until they have stopped for QUIET_MS. A drag emits an event
          per unit of travel, so without this she is handed a hand that is still moving and talks
@@ -1674,19 +1929,78 @@
 
          SUMMARY. The same event repeated is one line with a count, not fifteen. Tuning the
          Fourier mixer queued fifteen `fit` events in four seconds; she needs the last one and
-         the fact that there were fifteen, not the other fourteen. */
-      const QUIET_MS = 1800, POLL_MS = 250;
+         the fact that there were fifteen, not the other fourteen.
+
+         AND THE THING THAT CANNOT WAIT FOR HER TO ASK. Everything above only reaches her on her
+         next tool call, and her brief has her checking every eight to ten seconds. For "what have
+         they been up to" that is fine. For "they have just solved it" it is not: a learner who
+         matches the grey wave sits in front of a finished screen for the rest of that window
+         while the teacher talks about something else, and what that feels like is a teacher who
+         is not watching. So a FINISH takes the floor — `interrupt` below sends it as a turn on
+         the same `lk.chat` topic the text box uses, and she is cut off mid-sentence by it.
+
+         Two things earn that and nothing else does: the workspace coming to rest on an answer the
+         level marks correct, and an event a manipulative tagged `tell` (a milestone that is not
+         the answer — completing a Pythagoras rearrangement is the one). A slider frame does not
+         earn it and never will; that is the whole reason `since_last_call` exists. */
+      const QUIET_MS = 1800, POLL_MS = 250, LAND_MS = 650;
+      /**
+       * The page taking the floor, in the learner's stead.
+       *
+       * `lk.chat` is page → agent and it arrives as a turn, so this lands mid-word and she deals
+       * with it — the same mechanism, and the same justification, as the box under the board.
+       * `sentByUs` is what stops the echo coming back through `TranscriptionReceived` and being
+       * captioned as something the learner said.
+       */
+      function interrupt(text) {
+        if (!room) return void Trace.work("workspace milestone", text, "no call — nobody to tell");
+        sentByUs.add(text);
+        room.localParticipant.sendText(text, { topic:"lk.chat" })
+          .then(() => Trace.work("told her at once", text, "pushed on lk.chat, as a turn"))
+          .catch((e) => { sentByUs.delete(text);
+            Trace.err("milestone not pushed", String(e?.message ?? e)); });
+      }
       const Activity = (() => {
-        let pending = [], lastAt = 0;
+        let pending = [], lastAt = 0, landed = false, told = new Set();
         const pull = () => {
           const fresh = active?.events?.() ?? [];
           if (fresh.length) { pending.push(...fresh); lastAt = performance.now(); }
+          /* A `tell` is a manipulative saying "this one is worth being interrupted for". Deduped
+             per task, because flipping a Pythagoras arrangement back and forth is one piece of
+             news each way and not one per flip. */
+          for (const e of fresh) {
+            if (!e.tell || told.has(e.tell)) continue;
+            told.add(e.tell);
+            interrupt(`WORKSPACE: ${e.tell}`);
+          }
+        };
+        /**
+         * Has the workspace come to rest on a right answer?
+         *
+         * CORRECT ONLY, and that is a decision rather than an oversight. A learner sweeping the
+         * radius round to sin θ = 0.5 pauses at 0.3 on the way, and a detector that fired on any
+         * settled value would hand her a wrong answer to mark out of a gesture that was not
+         * finished. Landing on the right answer is unambiguous: it is the end of the task. A
+         * wrong one still reaches her, on her next check, exactly as before.
+         *
+         * LAND_MS, not QUIET_MS. The point of this is that it is immediate; two-thirds of a
+         * second is long enough to rule out passing through the answer mid-drag and short enough
+         * that the praise still belongs to the thing they just did.
+         */
+        const checkLanded = () => {
+          if (landed || !task || !tutorLed) return;
+          if (level.input !== "workspace") return;    // the keypad levels answer through her
+          if (performance.now()-lastAt < LAND_MS) return;
+          const v = active?.read?.()?.value;
+          if (v == null || !level.check(task, v).correct) return;
+          landed = true;
+          interrupt("WORKSPACE: they have stopped and there is an answer on screen. Check it now.");
         };
         /* Drained on a timer, not only when she asks. Stamping `lastAt` at collection time made
            the age of an event the age of her *question*: a learner who moved something once and
            then sat still for thirty seconds was reported as still working, because the event had
            been sitting in the manipulative's queue looking fresh the whole time. */
-        setInterval(pull, POLL_MS);
+        setInterval(() => { pull(); checkLanded(); }, POLL_MS);
         const squash = (evts) => {
           const by = new Map();
           for (const e of evts) {
@@ -1696,12 +2010,14 @@
           return [...by.values()];
         };
         return {
+          /** Everything a new task has to forget. */
+          reset() { pending = []; lastAt = 0; landed = false; told.clear(); },
           /** True while their hand is still on it. Checked by `answer` before it marks anything. */
-          busy() { pull(); return pending.length > 0 && performance.now()-lastAt < QUIET_MS; },
+          busy() { pull(); return !landed && pending.length > 0 && performance.now()-lastAt < QUIET_MS; },
           collect() {
             pull();
             if (!pending.length) return null;
-            if (performance.now()-lastAt < QUIET_MS)
+            if (!landed && performance.now()-lastAt < QUIET_MS)
               return { still_working: true, note: "their hand is still on it — say nothing yet" };
             const since_last_call = squash(pending);
             pending = [];
@@ -1912,12 +2228,16 @@
          put a box under a talking teacher — a learner who is lost at second three of the
          explanation should not have to sit through the other twenty to say so.
 
-         Which is exactly why the workspace does NOT use this channel. A drag fires events by the
-         frame and the Fourier mixer fired fifteen in four seconds; as turns that is fifteen
-         interruptions, and she would never finish a sentence. Those ride `since_last_call` on her
-         next tool call instead — ambient, and gated on a hand that has stopped moving. Two
-         channels, and the question that picks between them is whether the thing that just happened
-         has earned the right to take the floor. Typing has. Moving a slider has not. */
+         Which is exactly why the workspace does not use this channel for everything. A drag fires
+         events by the frame and the Fourier mixer fired fifteen in four seconds; as turns that is
+         fifteen interruptions, and she would never finish a sentence. Those ride `since_last_call`
+         on her next tool call instead — ambient, and gated on a hand that has stopped moving.
+
+         Two channels, and the question that picks between them is whether the thing that just
+         happened has earned the right to take the floor. Typing has. Moving a slider has not.
+         FINISHING has, which is the one case `interrupt` above sends here on the workspace's
+         behalf: it happens once per task, and a learner who has just matched the grey wave should
+         not wait out the rest of her sentence to hear about it. */
       let typed = null;
       /** Our own lines come back as transcription. Kept so the caption can tell who said what. */
       const sentByUs = new Set();
@@ -2300,6 +2620,12 @@
                said the bracket as well as the line. The example is gone; this catches a relapse. */
             const aside = last.text.match(/\([^)]{0,80}?\b(call|calling|show|showing|silently|tool)\b[^)]{0,80}?\)/i);
             if (aside) Trace.err("stage direction spoken aloud", aside[0]);
+            /* The third shape of the same failure, and the newest. The workspace pushes her a
+               line prefixed WORKSPACE: when a task is finished; her brief says that line is the
+               screen and is never to be read out. If it comes back through the transcript she
+               has read the page's own note to the learner. */
+            if (/\bworkspace\s*:/i.test(last.text))
+              Trace.err("workspace note read aloud", last.text.slice(0, 80));
           });
           room.on(RoomEvent.Disconnected, (r) => { Trace.room("Disconnected", r ?? "");
             clearTimeout(silenceTimer); herSpoke = false; stopCallMeters();

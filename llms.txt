@@ -47,6 +47,15 @@ Demos — larger showcases:
   tool, a cheaper model writes one standalone HTML page, and she publishes it to a Cloudflare
   Worker — receipt + poll for both, because a build and a deploy each outlive the 2.5s tool
   deadline. The preview is `sandbox="allow-scripts"` with no `allow-same-origin`
+- [apps/demo/pair-programmer](./apps/demo/pair-programmer): the same app in a different room —
+  identical brief, tools and build engine, composited the way `terminal-tutor` composites
+  (character full height in her own column, the app on glass in front of her). Kept as a PAIR
+  with `coding-companion` on purpose, so the only variable is the layout. It also uses
+  `realtime-avatar-browser` for the microphone and remote audio where the
+  companion inlines the same logic, which is the shortest side-by-side of what that package is
+  for. Its layout facts: a panel may overlap the character only into her mask fade, and the
+  vertical stack is measured by `fit()` rather than guessed in CSS — a dock that wraps at
+  400px wide put a button on top of the status line
 - [apps/demo/livestream](./apps/demo/livestream): comments, gifts and hearts all ride one
   `lk.chat` topic — she performs to a crowd she cannot see
 - [apps/demo/live-shopping](./apps/demo/live-shopping): the same room with a cart in it, where
@@ -67,6 +76,15 @@ Demos — larger showcases:
   (`text:delay`, `line:14`, `pane:right`) and the page resolves it, because a model cannot see
   the page it is pointing at and will aim confidently at nothing. A miss returns the list of
   what is addressable, so the retry is a pick rather than a second guess
+- [apps/demo/dating-rehearsal](./apps/demo/dating-rehearsal): a first date you practice on, and
+  four tools that are all HIS call, not the page's. `rate_interest` drives a live meter,
+  `mark_moment` pins a green flag or an ick, `end_date` walks him out, `write_debrief` writes the
+  after-card — the same model being charming is the one deciding how it went, so nothing scores
+  the conversation but him. State rides the tool call, never a transcript a meter could misread
+- [apps/demo/persuasion](./apps/demo/persuasion): the win condition is the character's own
+  judgement. She holds one absurd position and concedes only by calling a `concede` tool when a
+  genuinely novel argument defeats her — there is no scorer and no keyword list, and the win never
+  rides a sentence speech recognition could re-spell. `clientTools: true` at the mint is the gate
 There is no archive folder: a superseded example is deleted, not parked, so everything under
 apps/ is current and safe to copy from.
 

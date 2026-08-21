@@ -49,7 +49,23 @@ export default defineConfig({
   dts: {
     resolve: [/^realtime-avatar-contracts$/],
   },
-  sourcemap: true,
+  // NO sourcemaps. tsup emits them with `sourcesContent`, inlining the original TypeScript
+  // into the tarball: 23 files, 334,826 bytes, repeated across five entry-point maps for a
+  // 417 KB package against 5-15 KB for every other one here. Turning this off took it to
+  // 129 KB.
+  //
+  // Not a secrecy fix — `libs/client/src` is published in the public repo, so the same
+  // bytes are already readable there under MIT. Two reasons it is still off:
+  //
+  //   - Size. The maps were ~69% of the tarball, duplicating what the repo already serves.
+  //   - The carry is reviewed; a sourcemap is not. `sync-public.sh` decides what reaches
+  //     the public tree, and the private tree deliberately holds files it strips on the way
+  //     out. A map is built from whatever is on disk at build time, so it routes around
+  //     that review entirely — and unlike a repo, a published tarball cannot be retracted.
+  //
+  // If stack traces are wanted later, emit maps with `sourcesContent` stripped: line
+  // mapping is not the hazard. Do not just flip this back — `npm run boundary` now fails.
+  sourcemap: false,
   clean: true,
   splitting: false,
   treeshake: true,

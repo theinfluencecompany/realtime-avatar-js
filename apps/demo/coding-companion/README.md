@@ -48,31 +48,93 @@ output and sometimes it should have the room.
   narrates div structure, and a character spelling out a class name is unlistenable. The panel
   is where the app goes; her job is the one sentence next to it. The same line now covers the
   published URL — she says it is live and points at the link rather than reciting it.
+- **"Never build something they did not ask for"** is the other one, and it was missing.
+  Briefed to be "a senior engineer building a web app out loud", she opens the call *mid
+  project*: on a silent line, before a word was said, "I've been staring at that navigation
+  bar and I think we should swap it for a sidebar" — and then she CALLS `build_app` on it.
+  Measured: **three invented builds in four minutes of silence**, each narrated as though it
+  had been requested. No tool description prevents this, because from the model's side
+  inventing the request and carrying it out are the same move. It has to be forbidden in the
+  brief, and the state she is wrong about — nothing is built, you have no history with this
+  person — has to be *stated* rather than implied by a verb like "extend".
+- **A build already running is superseded, not refused.** `build_app` used to answer
+  `{status:'busy'}`, which is the right trade when every build is one the user asked for. It
+  stops being right the moment a build can be one *she* started: an invented build takes tens
+  of seconds, and a real request arriving inside that window got "busy" and never reached the
+  build engine at all. She then says a build is running — true, about a page nobody asked
+  for. Now the later request wins and the superseded stream is aborted, so it also stops
+  costing tokens it can no longer spend. `runBuild` re-checks `job === j` after every await,
+  or a superseded build's version lands on top of the newer one.
+- **Her tools are armed BEFORE the microphone is asked for.** `setMicrophoneEnabled` is a
+  permission prompt, and a permission prompt is a human deciding — this page waits up to
+  fifteen seconds for one. She starts talking the moment she connects, so every second spent
+  waiting on the mic first is a second she can call a tool that is not armed yet, and the
+  failure is silent on both sides: she gets an error the user never hears, and the panel
+  stays empty while she talks.
 - **A `ready`, video-sourced avatar can still publish a black track, and the page checks.**
   `AGENTS.md` rule 3 blames a still-image source for this; that is not the whole story. An
   avatar reporting `status: "ready"` and `sourceKind: "video"` was measured publishing a track
   that was live, decoding, and advancing — `readyState` 4, `videoWidth` 700, `paused` false —
   with every pixel of every frame at zero. The **same avatar id rendered normally on a later
   call**, so it is intermittent, which makes it worse: you cannot clear it by checking the
-  avatar once. Nothing in the API reports it, so `watchPixels()` reads a 32×32 sample once a
-  second, and six unbroken seconds of black turns a mystery black rectangle into a sentence
-  naming the cause. It stops the moment it sees a picture — its job is to catch a track that
-  is black for the whole call, and a GPU readback every second after that buys nothing.
-  **Do not use `sourceKind` as the test; look at the pixels.**
+  avatar once. Nothing in the API reports it, so a 32×32 sample once a second turns a mystery
+  black rectangle into a sentence naming the cause. It stops the moment it sees a picture —
+  its job is to catch a track that is black for the whole call, and a GPU readback every
+  second after that buys nothing. **Do not use `sourceKind` as the test; look at the pixels.**
+- **The picture can also just stop, and nothing fires.** Not black — *frozen*. `readyState`
+  stays 4, `paused` stays false, the `MediaStreamTrack` stays `live` and unmuted, and
+  `TrackUnsubscribed` does not fire. Measured when a call reached its `maxSeconds` cap: the
+  decoded-frame counter stopped dead at 7457 and the page went on saying "connected — say
+  what you want to build" until the tab was closed. The one-shot black check retires after
+  the first good frame, so after second one nothing was watching at all. So the picture is
+  now watched for the whole call, and the two checks retire differently on purpose: black
+  reads pixels and stops once it sees any, stall reads a frame *counter*, costs nothing, and
+  therefore never stops. Four seconds of a still counter says so in the status line and the
+  element is left alone — the frozen frame is still her, and blanking it throws away the only
+  thing on screen.
+- **The call has a hard cap and hitting it does not look like an ending.** It looks like the
+  bug above. The grant carries `max_session_seconds`, so the page counts it down in the
+  corner of the stage for the whole call: the freeze then arrives already explained, and the
+  page hangs up itself instead of waiting to be told about an ending it could predict to the
+  second. The grant's number is used rather than the one this server asked for — the grant is
+  what will actually be enforced.
+- **A call whose renderer never joined looks exactly like a call that has not started.**
+  Connected, talking, tools armed, audio fine, and no video track at all — measured
+  repeatedly on two different `ready`, video-sourced avatars, and it cleared on its own once
+  the render pool had room. Nothing reports it. The page waits twelve seconds and then says
+  **who is in the room and what they published** — `room holds: agent-AJ_QapDdftf7UU8[audio]`
+  — because the two causes want different people: a room with no agent in it is capacity or
+  dispatch, and an agent that joined and published only audio is the renderer.
 - **`height: 100%` on the video silently became `auto`.** The stage sizes itself with
   `aspect-ratio`, which makes a percentage height on its child cyclic — so the video fell back
   to its intrinsic 1:1 and rendered 353×353 inside a 242px-tall box, overflowing by 111px and
   being clipped by the rounded corner on every frame. It is absolutely positioned to `inset: 0`
   instead, which has no such cycle.
-- **The streaming panel repaints once a frame, not once a chunk.** Painting per delta looks
-  free and is not, because the pane is *visible* while it streams: each chunk set
-  `textContent` and then read `scrollHeight` on a growing, wrapping `<pre>`, which is a forced
-  synchronous layout — about 1200 of them, O(n²). Measured on a 14 KB document: **2762ms** of
-  main-thread time per build against **716ms** throttled, and during a real call it cost six
-  stalls of 187–286ms and 771ms of long tasks, against **zero of each** after. None of it
-  registers as a long task on its own, which is exactly why it hides: it is a thousand small
-  layouts, and it lands on whatever the user is typing. The same loop on the *hidden* tab
-  costs nothing, so benchmarking it without showing the pane will tell you it is fine.
+- **The streaming panel appends; it never re-sets.** Three costs hide in one line, and each
+  fix only removes one. Painting per *chunk* read `scrollHeight` back after every delta — a
+  forced synchronous layout on a growing, wrapping `<pre>`, about 1200 of them; throttling to
+  once a frame took a build from 2762ms of main thread to 716ms. What survived is that
+  `textContent = doc` **replaces** the text node, so the engine re-shapes all N characters
+  from scratch on every repaint — O(n × repaints), and invisible as a long task because it is
+  not one long task but a thousand medium ones landing on whatever you were typing. And a
+  frame is the wrong cadence anyway: gpt-4.1 takes about half a minute over 14 KB, so once a
+  frame is ~1500 repaints to show ~500 bytes a second, most of them adding eight characters.
+  Measured in this page on a 14 KB document of distinct lines — repeated lines cache their
+  shaping and flatter every option equally:
+
+  | strategy | main thread |
+  | --- | --- |
+  | replace, 1500 repaints | 772ms |
+  | append, 1500 repaints | 250ms |
+  | append, 300 repaints (12Hz) | **49ms** |
+
+  End to end, on a live call with video running and one 14 KB build, that is **3723ms of
+  renderer main thread over 45s down to 1118ms** — `performLayout` 442ms → 35ms, accessibility
+  tree 437ms → 50ms, `Paint` 351ms → 42ms, and text shaping out of the top twenty entirely.
+  **It is not WebRTC.** An idle call costs 1.8% of the renderer main thread and 5.4% of the
+  GPU thread; the preview iframe's own layout was 2.8ms against the page's 1184ms. If this
+  demo feels slow, the pane streaming the code is why.
+
 - **A build that produces nothing says so.** `writeDoc` used to return `""` for every
   failure — a refused request, an unreachable server, an empty answer — leaving an empty
   panel and no account of itself. That reads as the model having nothing to say rather than as
@@ -103,7 +165,11 @@ output and sometimes it should have the room.
   height, zero resizes.
 - **`TrackUnsubscribed` is handled.** A track can end without the call ending. Unhandled, the
   element keeps the dead stream and the stage stays a black rectangle still claiming to be her
-   — indistinguishable from a picture that merely went dark.
+   — indistinguishable from a picture that merely went dark. It is the *clean* way to lose the
+  picture, and the rarer one; the track going quiet while staying `live` fires nothing at all,
+  which is what the stall check above is for. `Reconnecting` and `Reconnected` are handled for
+  the same reason — a reconnect freezes the picture for as long as it takes, and a page that
+  says nothing there trains you to reload a call that was coming back.
 - **Her audio elements are not appended to `<body>`.** `body` is the page's two-column grid;
   media elements appended to it become grid items. They go in a dedicated hidden container and
   are removed when the call ends.
@@ -138,6 +204,10 @@ output and sometimes it should have the room.
   took a name from the request body would let any visitor overwrite any Worker on the account,
   which is not a demo bug — it is someone's production outage. Same shape as `/api/end`, which
   has always refused to hang up a call it did not start.
+- **`/api/end` marks the entry, it does not delete it.** That entry is also what
+  `/api/publish` looks a script name up in, and hanging up does not delete what you built — a
+  page you can still see is a page you should still be able to ship. The `ended` flag is what
+  makes ending idempotent, and `staleAtMs` sweeps the entry either way.
 - **One script per session, not per build.** Publishing five times updates one site at one
   URL. A demo that mints a script per build quietly fills a dashboard.
 - **A successful deploy serves a 404.** The upload returns success, the workers.dev route
@@ -182,5 +252,8 @@ Workers, but the scripts persist until you remove them — they are all named
 A call that is never joined still holds its slot until the join timeout notices, so the page
 says goodbye: on `pagehide` it beacons `/api/end`, and the server ends the call with `endCall`
 — the slot frees the moment the user leaves, even if the tab closes before the room exists.
-The server keeps the ids it minted and only ends those, so the route cannot be used to hang up
+**Hang up beacons it too.** Leaving the room does free the slot on its own, but only once the
+platform notices the participant has gone — measured at about eight seconds, on a meter that
+bills by the second. The server keeps the ids it minted and only ends those, so the route
+cannot be used to hang up
 someone else's call.

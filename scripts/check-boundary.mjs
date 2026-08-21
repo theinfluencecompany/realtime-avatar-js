@@ -79,6 +79,15 @@ async function* walk(dir) {
 const hits = [];
 let scanned = 0;
 
+// A sourcemap carrying `sourcesContent` inlines the ORIGINAL source — comments included —
+// into whatever ships. The term scan below cannot police that: it matches known
+// identifiers, and prose is where a paraphrase slips through. So this is a separate,
+// categorical rule rather than another entry on the denylist.
+//
+// It fires on anything under a `dist/`, because that is what `files` publishes. A map
+// with no `sourcesContent` is fine — line mapping is not the hazard, shipped source is.
+const embeddedSource = [];
+
 const seen = new Set();
 for (const root of ROOTS) {
   if (!(await stat(root).catch(() => null))) continue;
@@ -88,6 +97,23 @@ for (const root of ROOTS) {
     seen.add(key);
     scanned++;
     const text = await readFile(file, "utf8");
+
+    if (file.endsWith(".map") && /(^|\/)dist\//.test(key)) {
+      try {
+        const map = JSON.parse(text);
+        const carried = (map.sourcesContent ?? []).filter(Boolean);
+        if (carried.length > 0) {
+          embeddedSource.push({
+            file: key,
+            files: carried.length,
+            bytes: carried.reduce((n, s) => n + s.length, 0),
+          });
+        }
+      } catch {
+        // Not valid JSON — the term scan below still covers it as text.
+      }
+    }
+
     for (const term of FORBIDDEN) {
       if (text.includes(term)) {
         const line = text.split("\n").findIndex((l) => l.includes(term)) + 1;
@@ -95,6 +121,16 @@ for (const root of ROOTS) {
       }
     }
   }
+}
+
+if (embeddedSource.length > 0) {
+  console.error(`\n✗ boundary violated — ${embeddedSource.length} sourcemap(s) inline original source:\n`);
+  for (const { file, files, bytes } of embeddedSource) {
+    console.error(`  ${file}  ${files} source file(s), ${bytes.toLocaleString()} bytes`);
+  }
+  console.error("\nThese ship inside the npm tarball, comments and all, and cannot be retracted.");
+  console.error("Set `sourcemap: false`, or emit maps with `sourcesContent` stripped.\n");
+  process.exit(1);
 }
 
 if (hits.length > 0) {

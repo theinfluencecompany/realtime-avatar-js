@@ -22,10 +22,13 @@ sibling. One can be copied out of this repo and still work.
 | Example | Stack | Shows |
 | --- | --- | --- |
 | [`coding-companion`](./demo/coding-companion) | Node + browser | A builder you talk to: she starts a build via a client tool, a cheaper model writes one standalone HTML page, it renders in a sandboxed iframe and publishes to a Cloudflare Worker — build and publish both outlive the 2.5s deadline, so both are a receipt she polls with `check_app` |
+| [`pair-programmer`](./demo/pair-programmer) | Node + browser | The same app in a different room: same brief, same four tools, same build engine, composited the way `terminal-tutor` composites — she is full height in her own column and the app is on glass in front of her. A deliberate pair with `coding-companion`, so the only variable is the layout |
 | [`livestream`](./demo/livestream) | Node + browser | An audience is not a new primitive: a TikTok-Live room of comments, gifts and hearts all ride the one `lk.chat` topic, and she performs to a crowd she can't see |
 | [`live-shopping`](./demo/live-shopping) | Node + browser | The same room with a cart in it, where a sentence stops being a performance and becomes an offer: she is not allowed to know the price, five verbs hand her every figure she may say, and each one expires when the fact behind it does |
 | [`math-studio`](./demo/math-studio) | Node + browser | Keeping the tool plane a fixed size as the app grows: a tool per thing on screen fails to register at the eleventh, so six generic verbs act on a curriculum registered in the page, and adding a manipulative costs no tool and no brief |
 | [`terminal-tutor`](./demo/terminal-tutor) | Node + browser | She draws on the screen and never sends a coordinate: `highlight` takes `text:delay` or `line:14` and the page resolves it, because a model cannot see the page it is pointing at — teaching vim and tmux from behind translucent glass |
+| [`dating-rehearsal`](./demo/dating-rehearsal) | Node + browser | Four tools that are all the character's own call, not the page's: a first date you practice on rates its own interest into a live meter, pins the beats that turned it, walks out if it dies, and writes the debrief — the conversation is never scored by anything but him |
+| [`persuasion`](./demo/persuasion) | Node + browser | A win condition that is the character's own judgement: she holds an absurd position and concedes only by calling a `concede` tool when a genuinely new argument defeats her — nothing else decides it, and the win never rides a sentence speech recognition could mangle |
 
 > This repository is **private**. A link to an example only opens for someone who already has
 > repo access — so anywhere one of these is offered as "clone the code", say so. The packages
@@ -43,6 +46,12 @@ The folder is a promise. One question, answered in this order:
   customer?** → `demo/`. That is a shortlist, not an inbox — adding one is the right moment to
   name which existing demo it retires.
 - **Neither?** Then it does not go in `apps/`.
+
+`coding-companion` and `pair-programmer` are the one deliberate exception to the sentence
+above, and they are only worth keeping while that stays true: same brief, same tools, same
+build engine, two composites. The pair IS the lesson — what a layout changes and what it does
+not — so if they ever drift apart in behaviour they stop being a comparison and become a
+duplicate, and the duplicate is the one to delete.
 
 There is deliberately no third folder for examples that have been superseded. When one stops
 being the best answer, **delete it** — the history still has it, and a folder of examples
@@ -66,7 +75,7 @@ example gallery is configured outside this repository and is not covered by that
 5. **A stated cost** if it starts a call — minutes are billed, and someone running an example
    should know that before they run it.
 6. **Its own default port**, so two examples can run side by side. Taken today: 4192
-   coding-companion, 4193 canvas-tools, 4194 terminal-tutor, 4197 live-shopping, 4198
-   livestream, 4199 math-studio.
+   coding-companion, 4193 canvas-tools, 4194 terminal-tutor, 4195 dating-rehearsal, 4196
+   pair-programmer, 4197 live-shopping, 4198 livestream, 4199 math-studio, 4200 persuasion.
 
 Keep them small. An example is read far more often than it is run.
